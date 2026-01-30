@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ERP_Portal_RC.Application/ERP_Portal_RC.Application.csproj" />
+  <Project Path="ERP_Portal_RC.Domain/ERP_Portal_RC.Domain.csproj" />
+  <Project Path="ERP_Portal_RC.Infrastructure/ERP_Portal_RC.Infrastructure.csproj" />
+  <Project Path="ERP_Portal_RC/API.ERP_Portal_RC.csproj" />
+</Solution>
