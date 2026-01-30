@@ -27,8 +27,6 @@
 - 🏗️ **Clean Architecture** - Tách biệt rõ ràng giữa Domain, Application, và Infrastructure layers
 - 📚 **Swagger UI** - API documentation tự động và interactive
 - 🔄 **AutoMapper** - Object-to-object mapping tự động
-- 🌐 **CORS Support** - Cross-Origin Resource Sharing enabled
-- 💾 **Session Management** - Quản lý phiên làm việc người dùng
 - 🐳 **Docker Ready** - Sẵn sàng để containerize và deploy
 
 ## 🛠️ Tech Stack
@@ -95,15 +93,39 @@ ERP_Portal_RC/
 2. **Configure appsettings.json**
    ```json
    {
-     "ConnectionStrings": {
-       "DefaultConnection": "Your_Connection_String"
-     },
-     "Jwt": {
-       "SecretKey": "Your_Secret_Key",
-       "Issuer": "Your_Issuer",
-       "Audience": "Your_Audience"
-     }
-   }
+  "ConnectionStrings": {
+    "BosAccount": "Server=YOUR_SERVER;Initial Catalog=BosAccount;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosApproval": "Server=YOUR_SERVER;Initial Catalog=BosApproval;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosAsset": "Server=YOUR_SERVER;Initial Catalog=BosAsset;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosCataloge": "Server=YOUR_SERVER;Initial Catalog=BosCataloge;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosConfigure": "Server=YOUR_SERVER;Initial Catalog=BosConfigure;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosDocument": "Server=YOUR_SERVER;Initial Catalog=BosDocument;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosEVAT": "Server=YOUR_SERVER;Initial Catalog=BosEVAT;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosHumanResource": "Server=YOUR_SERVER;Initial Catalog=BosHumanResource;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosInfo": "Server=YOUR_SERVER;Initial Catalog=BosInfo;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosInventory": "Server=YOUR_SERVER;Initial Catalog=BosInventory;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosManufacture": "Server=YOUR_SERVER;Initial Catalog=BosManufacture;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosOnline": "Server=YOUR_SERVER;Initial Catalog=BosOnline;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosSales": "Server=YOUR_SERVER;Initial Catalog=BosSales;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosSupply": "Server=YOUR_SERVER;Initial Catalog=BosSupply;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    "BosWarehouseData": "Server=YOUR_SERVER;Initial Catalog=BosWarehouseData;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
+    
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "Jwt": {
+    "SecretKey": "YOUR_SEC_KEY_HERE", //Encode-by-base64
+    "Issuer": "ERPPortalAPI",
+    "Audience": "ERPPortalClient",
+    "AccessTokenExpirationMinutes": 60,
+    "RefreshTokenExpirationDays": 7
+  }
+}
    ```
 
 3. **Restore dependencies**
