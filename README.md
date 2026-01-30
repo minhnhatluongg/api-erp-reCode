@@ -93,7 +93,7 @@ ERP_Portal_RC/
 2. **Configure appsettings.json**
    ```json
    {
-  "ConnectionStrings": {
+        "ConnectionStrings": {
     "BosAccount": "Server=YOUR_SERVER;Initial Catalog=BosAccount;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
     "BosApproval": "Server=YOUR_SERVER;Initial Catalog=BosApproval;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
     "BosAsset": "Server=YOUR_SERVER;Initial Catalog=BosAsset;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
@@ -109,23 +109,8 @@ ERP_Portal_RC/
     "BosSales": "Server=YOUR_SERVER;Initial Catalog=BosSales;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
     "BosSupply": "Server=YOUR_SERVER;Initial Catalog=BosSupply;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
     "BosWarehouseData": "Server=YOUR_SERVER;Initial Catalog=BosWarehouseData;Persist Security Info=False;User ID=USERNAME;Password=YOUR_PASSWORD;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=360;",
-    
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
-  "Jwt": {
-    "SecretKey": "YOUR_SEC_KEY_HERE", //Encode-by-base64
-    "Issuer": "ERPPortalAPI",
-    "Audience": "ERPPortalClient",
-    "AccessTokenExpirationMinutes": 60,
-    "RefreshTokenExpirationDays": 7
-  }
-}
+   }
+  
    ```
 
 3. **Restore dependencies**
