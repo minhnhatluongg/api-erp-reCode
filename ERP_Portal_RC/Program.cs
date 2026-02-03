@@ -36,11 +36,13 @@ builder.Services.AddAutoMapper(typeof(MenuMappingProfile).Assembly);
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<ISalesHierarchyService, SalesHierarchyService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<ICustomStore, CustomStore>();
+builder.Services.AddScoped<ISalesHierarchyRepository, SalesHierarchyRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext

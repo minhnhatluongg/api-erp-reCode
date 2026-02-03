@@ -1,9 +1,5 @@
 namespace ERP_Portal_RC.Domain.Entities
 {
-    /// <summary>
-    /// Application User entity for JWT authentication
-    /// Note: Does NOT inherit from IdentityUser to avoid AutoMapper conflicts
-    /// </summary>
     public class ApplicationUser
     {
         public string Id { get; set; } = string.Empty;
@@ -14,7 +10,7 @@ namespace ERP_Portal_RC.Domain.Entities
         // Custom Properties from your ERP system
         public string LoginName { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
-        public string UserCode { get; set; } = string.Empty;
+        public string? UserCode { get; set; } 
         public string PasswordEx { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public int OSLogin { get; set; }

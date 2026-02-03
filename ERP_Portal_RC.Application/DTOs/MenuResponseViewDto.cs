@@ -15,6 +15,12 @@ namespace ERP_Portal_RC.Application.DTOs
             public string MenuDscpt { get; set; } = string.Empty;
             public string MenuIcon { get; set; } = string.Empty;
             public string? AcssForm { get; set; } = string.Empty;
+            public bool IsGroup { get; set; }
+            public bool IsFunct { get; set; }
+            public bool InToolBar { get; set; }
+            public string? MnCtType { get; set; }
+            public int AcssRght { get; set; }
+            public int ViewRght { get; set; }
 
             public Dictionary<string, string> Params { get; set; } = new();
             public Dictionary<string, string> Variants { get; set; } = new();

@@ -62,7 +62,8 @@ namespace ERP_Portal_RC.Application.Services
             }
 
             // 8. Mapping sang DTO từ danh sách ĐÃ LỌC (filteredMenu)
-            // Trong hàm GetUserMenuAsync của AccountService
+            bool isManager = rawMenu.Any(m => m.AcssForm == "WebContractFrom");
+
             var flatMenu = filteredMenu.Select(m => {
                 var dto = new MenuDto
                 {
@@ -71,6 +72,12 @@ namespace ERP_Portal_RC.Application.Services
                     MenuDscpt = m.MenuDscpt,
                     MenuIcon = m.MenuIcon,
                     AcssForm = m.AcssForm,
+                    IsGroup = m.IsGroup,   
+                    IsFunct = m.IsFunct,
+                    InToolBar = m.InToolBar,
+                    MnCtType = m.MnCtType,
+                    AcssRght = m.AcssRght,
+                    ViewRght = m.ViewRght,
                     Params = new Dictionary<string, string>(),
                     Variants = new Dictionary<string, string>() // Thêm Dictionary cho Variants
                 };
@@ -95,7 +102,7 @@ namespace ERP_Portal_RC.Application.Services
             // 9. Trồng cây
             response.Menu = BuildMenuTree(flatMenu);
             response.TotalMenuItems = flatMenu.Count;
-
+            response.IsManager = isManager;
             return response;
         }
 
