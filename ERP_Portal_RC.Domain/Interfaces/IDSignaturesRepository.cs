@@ -10,5 +10,6 @@ namespace ERP_Portal_RC.Domain.Interfaces
     public interface IDSignaturesRepository
     {
         Task<DSMenuViewModel> GetDSMenuByID(string loginname, string grp_code);
+        Task<DigitalSignaturesResult> CountCKS(string search, string crtUser, string dateStart, string dateEnd);
     }
 }

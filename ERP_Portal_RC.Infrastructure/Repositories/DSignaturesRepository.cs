@@ -15,6 +15,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
     {
         private readonly IDbConnectionFactory _dbConnectionFactory;
         private const string BosConfigureDb = "bosConfigure";
+        private const string BosOnlineDb = "BosOnline";
         public DSignaturesRepository(IDbConnectionFactory dbConnectionFactory)
         {
             _dbConnectionFactory = dbConnectionFactory;
@@ -35,7 +36,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     var cleanedGroup = group.Replace("'", "").Trim();
 
                     var parameters = new DynamicParameters();
-                    parameters.Add("@loginname", loginname, DbType.String);
+                    parameters.Add("@LognName", loginname, DbType.String);
                     parameters.Add("@CmpnID", "00");
                     parameters.Add("@LanguageDefault", "VN");
                     parameters.Add("@grp_code", cleanedGroup);
@@ -83,6 +84,42 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 {
                     _dbConnectionFactory.CloseConnection(connection);
                 }
+            }
+        }
+
+        public async Task<DigitalSignaturesResult> CountCKS(string search, string crtUser, string dateStart, string dateEnd)
+        {
+            var model = new DigitalSignaturesResult();
+            SqlConnection? connection = null;
+            try
+            {
+                connection = _dbConnectionFactory.OpenConnection(BosOnlineDb); 
+
+                var parameters = new DynamicParameters();
+                parameters.Add("@CrtUser", crtUser);
+                parameters.Add("@Frm_date", dateStart);
+                parameters.Add("@End_date", dateEnd);
+                parameters.Add("@strSearch", search);
+
+                using (var result = await connection.QueryMultipleAsync(
+                    "wspCount_DigitalSignatures",
+                    parameters,
+                    commandType: CommandType.StoredProcedure,
+                    commandTimeout: 300))
+                {
+                    var jobs = (await result.ReadAsync<zsgnJob>()).ToList();
+                    model.digital_Moniter = (await result.ReadAsync<Digital_Moniter>()).ToList();
+
+                    if (model.digital_Moniter.Any())
+                    {
+                        model.digital_Moniter = model.digital_Moniter.OrderByDescending(s => s.Crt_Date).ToList();
+                    }
+                }
+                return model;
+            }
+            finally
+            {
+                if (connection != null) _dbConnectionFactory.CloseConnection(connection);
             }
         }
     }
