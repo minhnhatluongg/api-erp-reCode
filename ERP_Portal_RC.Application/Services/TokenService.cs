@@ -49,7 +49,7 @@ namespace ERP_Portal_RC.Application.Services
                 new Claim(ClaimTypes.NameIdentifier, user.Id),
                 new Claim(ClaimTypes.Name, user.LoginName),
                 new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
-                new Claim("UserCode", user.UserCode),
+                new Claim("UserCode", user.UserCode?.ToString() ?? string.Empty),
                 new Claim("FullName", user.FullName),
                 new Claim(JwtRegisteredClaimNames.Jti, jwtId),
                 new Claim(JwtRegisteredClaimNames.Sub, user.LoginName),

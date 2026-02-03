@@ -48,7 +48,7 @@ namespace ERP_Portal_RC.Domain.Entities
         public bool IsToolBar { get; set; }
         public string? MnCtType { get; set; }
         public string? AcssReport { get; set; }
-
+        public bool InToolBar { get; set; }
         public int AcssRght { get; set; }
         public int ViewRght { get; set; }
 

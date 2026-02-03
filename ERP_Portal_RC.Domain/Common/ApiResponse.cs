@@ -17,10 +17,7 @@ namespace ERP_Portal_RC.Domain.Common
         public ApiResponse()
         {
         }
-
-        /// <summary>
-        /// Constructor với data
-        /// </summary>
+        
         public ApiResponse(T data, string message = "Thành công")
         {
             Success = true;
@@ -28,10 +25,7 @@ namespace ERP_Portal_RC.Domain.Common
             Message = message;
             StatusCode = 200;
         }
-
-        /// <summary>
-        /// Tạo response thành công
-        /// </summary>
+        
         public static ApiResponse<T> SuccessResponse(T data, string message = "Thành công", int statusCode = 200)
         {
             return new ApiResponse<T>
@@ -44,9 +38,7 @@ namespace ERP_Portal_RC.Domain.Common
             };
         }
 
-        /// <summary>
-        /// Tạo response lỗi
-        /// </summary>
+        
         public static ApiResponse<T> ErrorResponse(string message, int statusCode = 400, List<string>? errors = null)
         {
             return new ApiResponse<T>
@@ -59,9 +51,7 @@ namespace ERP_Portal_RC.Domain.Common
             };
         }
 
-        /// <summary>
-        /// Tạo response với metadata
-        /// </summary>
+      
         public static ApiResponse<T> SuccessResponseWithMeta(
             T data, 
             Dictionary<string, object> meta, 
@@ -79,9 +69,7 @@ namespace ERP_Portal_RC.Domain.Common
         }
     }
 
-    /// <summary>
-    /// API Response không có data (chỉ status)
-    /// </summary>
+    
     public class ApiResponse : ApiResponse<object>
     {
         public static new ApiResponse SuccessResponse(string message = "Thành công", int statusCode = 200)
@@ -107,10 +95,7 @@ namespace ERP_Portal_RC.Domain.Common
             };
         }
     }
-
-    /// <summary>
-    /// Paginated Response cho danh sách có phân trang
-    /// </summary>
+       
     public class PagedResponse<T> : ApiResponse<List<T>>
     {
         public int PageNumber { get; set; }

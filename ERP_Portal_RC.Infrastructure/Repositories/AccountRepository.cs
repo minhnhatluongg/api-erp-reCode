@@ -93,6 +93,11 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                         AppID = reader["AppID"]?.ToString() ?? "",
                         AcssRght = reader["AcssRght"] != DBNull.Value ? Convert.ToInt32(reader["AcssRght"]) : 0,
                         ViewRght = reader["ViewRght"] != DBNull.Value ? Convert.ToInt32(reader["ViewRght"]) : 0,
+                        IsGroup = columnNames.Contains("IsGroup") && reader["isGroup"] != DBNull.Value && Convert.ToBoolean(reader["IsGroup"]),
+                        IsFunct = columnNames.Contains("IsFunct") && reader["isGroup"] != DBNull.Value && Convert.ToBoolean(reader["IsFunct"]),
+                        InToolBar = columnNames.Contains("InToolBar") && reader["isGroup"] != DBNull.Value && Convert.ToBoolean(reader["InToolBar"]),
+                        MnCtType = reader["MnCtType"].ToString() ?? "",
+                        AcssReport = reader["AcssReport"].ToString() ?? "",
                     };
 
                     // 1. Đọc 50 Parameters

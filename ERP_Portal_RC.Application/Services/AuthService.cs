@@ -73,7 +73,7 @@ namespace ERP_Portal_RC.Application.Services
                     {
                         Id = Guid.NewGuid().ToString(),
                         LoginName = userOnAp.LoginName ?? string.Empty,
-                        UserCode = userOnAp.UserCode ?? string.Empty,
+                        UserCode = userOnAp.UserCode,
                         FullName = userOnAp.FullName ?? string.Empty,
                         UserName = userOnAp.LoginName ?? string.Empty,
                         Email = $"{userOnAp.Email}", 
@@ -112,32 +112,22 @@ namespace ERP_Portal_RC.Application.Services
         {
             try
             {
-                // Kiểm tra user đã tồn tại chưa
                 var existingCheck = _customStore.ChkUser(request.LoginName);
                 if (existingCheck > 0)
                 {
                     _logger.LogWarning("Registration failed: User already exists - {LoginName}", request.LoginName);
                     return null;
                 }
-
-                // Mã hóa password
                 var encryptedPassword = Sha1.Encrypt(request.Password);
 
-                // Tạo ApplicationUser object
                 var newUser = new ApplicationUser
                 {
-                    Id = Guid.NewGuid().ToString(),
                     LoginName = request.LoginName,
-                    UserName = request.LoginName,
-                    Email = request.Email,
+                    Password = encryptedPassword,
                     FullName = request.FullName,
-                    UserCode = request.UserCode ?? request.LoginName,
-                    PhoneNumber = request.PhoneNumber,
-                    Grp_List = request.Grp_List ?? string.Empty,
-                    Password = encryptedPassword
+                    Email = request.Email
                 };
-
-                // Lưu user vào database
+                
                 var createResult = _customStore.CreateUser(newUser);
                 
                 if (createResult <= 0)
@@ -145,7 +135,7 @@ namespace ERP_Portal_RC.Application.Services
                     _logger.LogWarning("Registration failed: Cannot create user - {LoginName}", request.LoginName);
                     return null;
                 }
-
+                newUser.UserCode = createResult.ToString();
                 // Thêm user vào group mặc định
                 try
                 {
@@ -249,7 +239,7 @@ namespace ERP_Portal_RC.Application.Services
                 {
                     Id = userId,
                     LoginName = userOnAp.LoginName ?? string.Empty,
-                    UserCode = userOnAp.UserCode ?? string.Empty,
+                    UserCode = userOnAp.UserCode,
                     FullName = userOnAp.FullName ?? string.Empty,
                     UserName = userOnAp.FullName,
                     Email = $"{userOnAp.Email}"
@@ -350,7 +340,7 @@ namespace ERP_Portal_RC.Application.Services
                 {
                     Id = principal.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? string.Empty,
                     LoginName = userOnAp.LoginName ?? string.Empty,
-                    UserCode = userOnAp.UserCode ?? string.Empty,
+                    UserCode = userOnAp.UserCode,
                     FullName = userOnAp.FullName ?? string.Empty,
                     UserName = userOnAp.FullName ?? string.Empty,
                     Email = $"{userOnAp.FullName}",
