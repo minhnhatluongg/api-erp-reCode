@@ -7,10 +7,12 @@ using System.Threading.Tasks;
 
 namespace ERP_Portal_RC.Application.DTOs
 {
-    public class DigitalSignaturesViewModel
+    public class DigitalSignaturesDashboardDto
     {
         public ApplicationUser? ApplicationUser { get; set; }
         public List<bosMenuRight>? bosMenuRight { get; set; }
         public int mode { get; set; }
+        public DashboardStatsDto cks { get; set; } = new();
+        public DashboardStatsDto dashboard { get; set; } = new();
     }
 }

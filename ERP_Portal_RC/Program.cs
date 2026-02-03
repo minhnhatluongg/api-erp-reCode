@@ -37,12 +37,16 @@ builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ISalesHierarchyService, SalesHierarchyService>();
+builder.Services.AddScoped<IDSignaturesService, DSignaturesService>();
+builder.Services.AddScoped<IEcontractService, EcontractService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<ICustomStore, CustomStore>();
 builder.Services.AddScoped<ISalesHierarchyRepository, SalesHierarchyRepository>();
+builder.Services.AddScoped<IDSignaturesRepository, DSignaturesRepository>();
+builder.Services.AddScoped<IEContractRepository, EContractRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext

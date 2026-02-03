@@ -9,6 +9,6 @@ namespace ERP_Portal_RC.Application.Interfaces
 {
     public interface IDSignaturesService
     {
-        Task<DigitalSignaturesViewModel> GetCountDigitalSignaturesAsync(string userName, bool isManager);
+        Task<DigitalSignaturesDashboardDto> GetCountDigitalSignaturesAsync(string loginName, string userCode, string groupList, bool isManager);
     }
 }
