@@ -10,11 +10,6 @@ namespace ERP_Portal_RC.Domain.Common
     {
         private static readonly byte[] _key = Encoding.ASCII.GetBytes("Nghe!Con");
 
-        /// <summary>
-        /// Mã hóa chuỗi sử dụng DES
-        /// </summary>
-        /// <param name="inputString">Chuỗi cần mã hóa</param>
-        /// <returns>Chuỗi đã mã hóa (Base64)</returns>
         public static string Encrypt(string inputString)
         {
             if (string.IsNullOrEmpty(inputString))
@@ -37,11 +32,6 @@ namespace ERP_Portal_RC.Domain.Common
             return Convert.ToBase64String(memoryStream.GetBuffer(), 0, (int)memoryStream.Length);
         }
 
-        /// <summary>
-        /// Giải mã chuỗi đã mã hóa bằng DES
-        /// </summary>
-        /// <param name="encryptedString">Chuỗi đã mã hóa (Base64)</param>
-        /// <returns>Chuỗi gốc</returns>
         public static string Decrypt(string encryptedString)
         {
             if (string.IsNullOrEmpty(encryptedString))
@@ -66,12 +56,6 @@ namespace ERP_Portal_RC.Domain.Common
                 throw new InvalidOperationException("Không thể giải mã chuỗi", ex);
             }
         }
-
-        /// <summary>
-        /// Thử giải mã, trả về null nếu thất bại
-        /// </summary>
-        /// <param name="encryptedString">Chuỗi đã mã hóa</param>
-        /// <returns>Chuỗi gốc hoặc null</returns>
         public static string? TryDecrypt(string encryptedString)
         {
             try

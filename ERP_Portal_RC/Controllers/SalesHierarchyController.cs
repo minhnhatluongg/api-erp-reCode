@@ -1,6 +1,7 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
+using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.ERP_Portal_RC.Controllers
@@ -19,6 +20,23 @@ namespace API.ERP_Portal_RC.Controllers
         {
             var tree = await _salesHierarchyService.GetManagerTreeAsync(clnID, isManager);
             return Ok(new { success = true, data = tree });
+        }
+        [HttpPost("register")]
+        public async Task<IActionResult> RegisterSale([FromBody] SaleRegistrationModel request)
+        {
+            try
+            {
+                var result = await _salesHierarchyService.HandleSaleRegistrationAsync(request);
+                return Ok(ApiResponse<RegistrationResultDto>.SuccessResponse(result, "Đăng ký nhân sự thành công."));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse<RegistrationResultDto>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<RegistrationResultDto>.ErrorResponse(ex.Message));
+            }
         }
     }
 }

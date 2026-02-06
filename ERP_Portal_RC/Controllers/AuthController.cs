@@ -62,54 +62,6 @@ namespace ERP_Portal_RC.Controllers
         }
 
         /// <summary>
-        /// Đăng ký user mới - Register
-        /// </summary>
-        /// <param name="request">RegisterRequestDto</param>
-        /// <returns>AuthResponseDto với AccessToken và RefreshToken</returns>
-        [HttpPost("register")]
-        [AllowAnonymous]
-        [ProducesResponseType(typeof(ApiResponse<AuthResponseDto>), 200)]
-        [ProducesResponseType(typeof(ApiResponse), 400)]
-        public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(request.LoginName) || 
-                    string.IsNullOrWhiteSpace(request.Password) ||
-                    string.IsNullOrWhiteSpace(request.FullName) ||
-                    string.IsNullOrWhiteSpace(request.Email))
-                {
-                    return BadRequest(ApiResponse.ErrorResponse(
-                        "Các trường bắt buộc không được để trống", 400));
-                }
-
-                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-                var userAgent = Request.Headers["User-Agent"].ToString();
-
-                var result = await _authService.RegisterAsync(request, ipAddress, userAgent);
-
-                if (result == null)
-                {
-                    return BadRequest(ApiResponse.ErrorResponse(
-                        "User đã tồn tại hoặc không thể tạo mới", 400));
-                }
-
-                _logger.LogInformation("User {LoginName} registered successfully from {IpAddress}", 
-                    request.LoginName, ipAddress);
-
-                return Ok(ApiResponse<AuthResponseDto>.SuccessResponse(
-                    result, 
-                    "Đăng ký thành công"));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during registration for user: {LoginName}", request.LoginName);
-                return StatusCode(500, ApiResponse.ErrorResponse(
-                    "Lỗi server khi đăng ký", 500));
-            }
-        }
-
-        /// <summary>
         /// Refresh access token sử dụng refresh token
         /// </summary>
         /// <param name="request">RefreshTokenRequestDto</param>
