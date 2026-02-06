@@ -108,67 +108,6 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
-        public async Task<AuthResponseDto?> RegisterAsync(RegisterRequestDto request, string? ipAddress, string? userAgent)
-        {
-            try
-            {
-                var existingCheck = _customStore.ChkUser(request.LoginName);
-                if (existingCheck > 0)
-                {
-                    _logger.LogWarning("Registration failed: User already exists - {LoginName}", request.LoginName);
-                    return null;
-                }
-                var encryptedPassword = Sha1.Encrypt(request.Password);
-
-                var newUser = new ApplicationUser
-                {
-                    LoginName = request.LoginName,
-                    Password = encryptedPassword,
-                    FullName = request.FullName,
-                    Email = request.Email
-                };
-                
-                var createResult = _customStore.CreateUser(newUser);
-                
-                if (createResult <= 0)
-                {
-                    _logger.LogWarning("Registration failed: Cannot create user - {LoginName}", request.LoginName);
-                    return null;
-                }
-                newUser.UserCode = createResult.ToString();
-                // Thêm user vào group mặc định
-                try
-                {
-                    _customStore.AddUserToGroup(newUser);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to add user to default group: {LoginName}", request.LoginName);
-                    // Continue anyway - user đã được tạo
-                }
-
-                // Generate tokens
-                var (accessToken, jwtId, expiresAt) = _tokenService.GenerateAccessToken(newUser);
-                var refreshToken = await _tokenService.GenerateAndSaveRefreshTokenAsync(newUser.Id, jwtId, ipAddress, userAgent);
-
-                var userDto = _mapper.Map<UserDto>(newUser);
-
-                _logger.LogInformation("User {LoginName} registered successfully", request.LoginName);
-
-                return new AuthResponseDto
-                {
-                    AccessToken = accessToken,
-                    RefreshToken = refreshToken,
-                    ExpiresAt = expiresAt,
-                    User = userDto
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during registration for user: {LoginName}", request.LoginName);
-                throw;
-            }
-        }
 
         public async Task<AuthResponseDto?> RefreshTokenAsync(RefreshTokenRequestDto request, string? ipAddress, string? userAgent)
         {

@@ -7,8 +7,6 @@ namespace ERP_Portal_RC.Application.Interfaces
     {
         /// Đăng nhập và tạo JWT tokens
         Task<AuthResponseDto?> LoginAsync(LoginRequestDto request, string? ipAddress, string? userAgent);
-        /// Đăng ký user mới
-        Task<AuthResponseDto?> RegisterAsync(RegisterRequestDto request, string? ipAddress, string? userAgent);
         /// Refresh access token sử dụng refresh token
         Task<AuthResponseDto?> RefreshTokenAsync(RefreshTokenRequestDto request, string? ipAddress, string? userAgent);
         /// Revoke refresh token (logout một device)

@@ -11,12 +11,12 @@ namespace ERP_Portal_RC.Domain.Interfaces
         /// Check user tồn tại hay không
         Task<IEnumerable<int>> CheckUserByLoginNameAsync(string loginName);
         /// Check user tồn tại (sync version)
-        int ChkUser(string loginName);
+        Task<int> ChkUser(string loginName);
         /// Lấy menu theo group
         Task<IEnumerable<web_bosMenu_ByGroup>> GetApplicationToolsByGroupAsync(string groupList);
         /// Tạo user mới
         int CreateUser(ApplicationUser user);
         /// Thêm user vào group
-        int AddUserToGroup(ApplicationUser user);
+        Task<int> AddUserToGroup(string userCode);
     }
 }

@@ -103,7 +103,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             }
         }
 
-        public int ChkUser(string loginName)
+        public async Task<int> ChkUser(string loginName)
         {
             SqlConnection? connection = null;
             try
@@ -190,7 +190,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             }
         }
 
-        public int AddUserToGroup(ApplicationUser user)
+        public async Task<int> AddUserToGroup(string userCode)
         {
             SqlConnection? connection = null;
             IDbTransaction? transaction = null;
@@ -201,9 +201,9 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 transaction = connection.BeginTransaction();
 
                 var parameters = new DynamicParameters();
-                parameters.Add("@DESCRIP", "Khách sử dụng Hồ sơ điện tử");
-                parameters.Add("@Grp_Code", "E15.067.09732");
-                parameters.Add("@UserCode", user.UserCode);
+                parameters.Add("@DESCRIP", "NHÂN VIÊN.NHÂN VIÊN KINH DOANH.TOÀN HỆ THỐNG.CÔNG TY CP MONET");
+                parameters.Add("@Grp_Code", "00006.00084.00121");
+                parameters.Add("@UserCode", userCode);
                 parameters.Add("@SignNumb", 0);
                 parameters.Add("@SignDate", DateTime.Now);
                 parameters.Add("@Crt_User", "000015");
@@ -224,7 +224,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             catch (Exception ex)
             {
                 transaction?.Rollback();
-                throw new InvalidOperationException($"Lỗi khi thêm user vào group: {user.UserCode}", ex);
+                throw new InvalidOperationException($"Lỗi khi thêm user vào group: {userCode}", ex);
             }
             finally
             {
