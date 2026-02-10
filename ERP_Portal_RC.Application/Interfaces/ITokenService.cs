@@ -10,5 +10,8 @@ namespace ERP_Portal_RC.Application.Interfaces
         bool ValidateToken(string token);
         ClaimsPrincipal? GetPrincipalFromToken(string token, bool validateLifetime = true);
         string GenerateRandomToken();
+
+        //Dành cho Generate Code Login  /get-registration-code
+        (string accessToken, string jwtId, DateTime expiresAt) GenerateAccessToken(TechnicalUser user);
     }
 }

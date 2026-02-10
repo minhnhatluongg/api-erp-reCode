@@ -20,8 +20,7 @@ namespace ERP_Portal_RC.Application.Mappings
             // Mapping từ thực thể cũ (UserOnAp) sang DTO mới
             CreateMap<UserOnAp, UserDto>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
-                .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.LoginName))
-                .ForAllOtherMembers(opts => opts.Ignore()); // Chặn các trường không khớp
+                .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.LoginName));
         }
     }
 }
