@@ -22,7 +22,7 @@ namespace ERP_Portal_RC.Application.Mappings
                 .ForMember(dest => dest.User, opt => opt.MapFrom(src => src))
                 .ForMember(dest => dest.AccessToken, opt => opt.Ignore())
                 .ForMember(dest => dest.RefreshToken, opt => opt.Ignore())
-                .ForMember(dest => dest.ExpiresAt, opt => opt.Ignore());
+                .ForMember(dest => dest.ExpiresAt, opt => opt.Ignore()); // Will be set manually
         }
     }
 }

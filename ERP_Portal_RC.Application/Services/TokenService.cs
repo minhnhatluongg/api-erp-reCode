@@ -158,5 +158,38 @@ namespace ERP_Portal_RC.Application.Services
             rng.GetBytes(randomBytes);
             return Convert.ToBase64String(randomBytes);
         }
+
+        public (string accessToken, string jwtId, DateTime expiresAt) GenerateAccessToken(TechnicalUser user)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.UTF8.GetBytes(_jwtSettings.SecretKey);
+            var jwtId = Guid.NewGuid().ToString();
+            var expiresAt = DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes);
+
+            var claims = new List<Claim>
+                {
+                    // Sử dụng các thông tin từ bảng TechnicalUsers
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new Claim(ClaimTypes.Name, user.Username),
+                    new Claim(JwtRegisteredClaimNames.Jti, jwtId),
+                    new Claim(ClaimTypes.Role, "Technical"),
+                    new Claim("UserType", "TechnicalAdmin")
+                };
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = expiresAt,
+                Issuer = _jwtSettings.Issuer,
+                Audience = _jwtSettings.Audience,
+                SigningCredentials = new SigningCredentials(
+            new SymmetricSecurityKey(key),
+            SecurityAlgorithms.HmacSha256Signature)
+            };
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            var accessToken = tokenHandler.WriteToken(token);
+
+            return (accessToken, jwtId, expiresAt);
+        }
     }
 }

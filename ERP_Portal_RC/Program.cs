@@ -26,11 +26,13 @@ builder.Services.AddSession(options =>
 
 // Đăng ký DbConnectionFactory
 builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
-
-// Configure AutoMapper
-builder.Services.AddAutoMapper(typeof(AccountMappingProfile).Assembly);
-builder.Services.AddAutoMapper(typeof(AuthMappingProfile).Assembly);
-builder.Services.AddAutoMapper(typeof(MenuMappingProfile).Assembly);
+// Gộp tất cả vào một lần gọi duy nhất
+builder.Services.AddAutoMapper(new[] {
+    typeof(AccountMappingProfile).Assembly,
+    typeof(AuthMappingProfile).Assembly,
+    typeof(MenuMappingProfile).Assembly,
+    typeof(TechnicalMappingProfile).Assembly
+});
 
 // Đăng ký Application Services
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -39,6 +41,7 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ISalesHierarchyService, SalesHierarchyService>();
 builder.Services.AddScoped<IDSignaturesService, DSignaturesService>();
 builder.Services.AddScoped<IEcontractService, EcontractService>();
+builder.Services.AddScoped<IRegistrationCodeService, RegistrationCodeService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -47,6 +50,7 @@ builder.Services.AddScoped<ICustomStore, CustomStore>();
 builder.Services.AddScoped<ISalesHierarchyRepository, SalesHierarchyRepository>();
 builder.Services.AddScoped<IDSignaturesRepository, DSignaturesRepository>();
 builder.Services.AddScoped<IEContractRepository, EContractRepository>();
+builder.Services.AddScoped<ITechnicalUserRepository, TechnicalUserRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext
@@ -152,7 +156,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Portal API V1");
-        options.RoutePrefix = "swagger";
+        options.RoutePrefix = "";
         options.DocumentTitle = "ERP Portal API Documentation";
         options.DefaultModelsExpandDepth(2);
         options.DefaultModelExpandDepth(2);
@@ -169,7 +173,7 @@ else
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Portal API V1");
-        options.RoutePrefix = "api-docs";
+        options.RoutePrefix = "";
     });
 }
 
