@@ -10,5 +10,6 @@ namespace ERP_Portal_RC.Application.DTOs
     {
         public string NewEmployeeID { get; set; }  
         public string? NewUserCode { get; set; }   
+        public string? CodeLogin { get; set; }
     }
 }

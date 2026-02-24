@@ -40,6 +40,11 @@ namespace ERP_Portal_RC.Application.Services
             return newCode;
         }
 
+        public async Task<IEnumerable<RegistertrationCodes>> GetUserCodesAsync(int userId)
+        {
+            return await _techRepo.GetCodesByUserIdAsync(userId);
+        }
+
         public async Task<LoginResponseDto?> LoginAsync(TechnicalLoginRequest request)
         {
             var user = await _techRepo.GetByUserNameAsync(request.Username);

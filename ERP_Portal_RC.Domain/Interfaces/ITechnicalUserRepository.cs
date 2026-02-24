@@ -14,6 +14,7 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<RegistertrationCodes> GetValidCodeAsync(string code);
         Task AddRegistrationCodeAsync(RegistertrationCodes code);
         Task UpdateRegistrationCodeAsync ( RegistertrationCodes code);
+        Task<IEnumerable<RegistertrationCodes>> GetCodesByUserIdAsync(int userId);
         Task SaveChangesAsync();
     }
 }

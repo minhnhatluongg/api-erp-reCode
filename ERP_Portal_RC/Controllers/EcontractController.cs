@@ -1,9 +1,11 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
+using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace API.ERP_Portal_RC.Controllers
 {
@@ -78,6 +80,201 @@ namespace API.ERP_Portal_RC.Controllers
                 return BadRequest(ApiResponse<ListEcontractViewModel>.ErrorResponse(ex.Message));
             }
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAll([FromQuery] EContractFilterRequest request)
+        {
+            try
+            {
+                var loginName = User.FindFirst(ClaimTypes.Name)?.Value;
+                var userCode = User.FindFirst("UserCode")?.Value;
+                var groupList = User.FindFirst("Grp_List")?.Value ?? "";
+
+                if (string.IsNullOrEmpty(userCode))
+                {
+                    return Unauthorized(ApiResponse.ErrorResponse("Không tìm thấy mã người dùng trong Token.", 401));
+                }
+
+                var result = await _econtractService.GetAllEContractsAsync(loginName, request, groupList, userCode);
+
+                var meta = new Dictionary<string, object>
+                {
+                    { "moneyToBePaid", result.MoneyToBePaid },
+                    { "moneyPaid", result.MoneyPaid },
+                    { "disable", result.Disable }
+                };
+
+                // 3. Tạo PagedResponse lồng trong ApiResponse
+                var response = PagedResponse<EContract_Monitor>.Create(
+                    result.Data,
+                    request.Page,
+                    request.PageSize,
+                    result.Total
+                );
+
+                // Gán Meta bổ sung vào response
+                response.Meta = meta;
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 400));
+            }
+        }
+
+        /// Lấy mẫu hợp đồng dựa trên loại sử dụng ApiResponse wrapper
+        /// <param name="type"> original | compensation | extension</param>
+        [HttpGet("preview/{type}")]
+        public async Task<ActionResult<ApiResponse<Template>>> GetTemplateByType(string type)
+        {
+            try
+            {
+                Template? template = null;
+
+                // 1. Điều hướng Service dựa trên tham số type
+                switch (type.ToLower())
+                {
+                    case "original":
+                        template = await _econtractService.GetOriginalContractAsync();
+                        break;
+                    case "compensation":
+                        template = await _econtractService.GetCompensationContractAsync();
+                        break;
+                    case "extension":
+                        template = await _econtractService.GetExtensionContractAsync();
+                        break;
+                    default:
+                        return BadRequest(ApiResponse<Template>.ErrorResponse(
+                            "Loại hợp đồng không hợp lệ. Vui lòng chọn: original, compensation hoặc extension.",
+                            400));
+                }
+
+                if (template == null)
+                {
+                    return NotFound(ApiResponse<Template>.ErrorResponse(
+                        "Không tìm thấy mẫu hợp đồng tương ứng trong hệ thống!",
+                        404));
+                }
+
+                return Ok(ApiResponse<Template>.SuccessResponse(
+                    template,
+                    "Lấy thông tin mẫu hợp đồng thành công"));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ApiResponse<Template>.ErrorResponse(
+                    $"Lỗi hệ thống: {ex.Message}",
+                    500));
+            }
+        }
+
+        #region Trình kí / Yêu cầu Phát hành / Phát Hành Mẫu
+
+        /// <summary>
+        /// Trình ký hợp đồng điện tử: Đẩy trạng thái 0 → 101.
+        /// Chỉ cần truyền OID. Các thông tin khác (MST, SampleID) được tự enrich từ DB.
+        /// </summary>
+        [HttpPost("propose-sign")]
+        public async Task<IActionResult> ProposeSign([FromBody] ApprovalWorkflowRequest model)
+        {
+            var userId = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return StatusCode(StatusCodes.Status401Unauthorized, new { status = 0, message = "Phiên đăng nhập hết hạn, vui lòng đăng nhập lại." });
+
+            if (string.IsNullOrWhiteSpace(model.OID))
+                return BadRequest(new { status = 0, message = "OID không được để trống." });
+
+            var saleFullName = User.FindFirst("FullName")?.Value ?? string.Empty;
+
+            try
+            {
+                var (success, emailSent) = await _econtractService.ProposeSignContractAsync(model, userId, saleFullName);
+
+                if (!success)
+                    return BadRequest(new { status = 0, message = "Trình ký thất bại. Hợp đồng có thể đã được trình ký trước đó.", emailSent = false });
+
+                return Ok(new
+                {
+                    status = 1,
+                    message = "Trình ký hợp đồng thành công.",
+                    emailSent,
+                    emailMessage = emailSent
+                        ? $"Email thông báo đã gửi tới ketoanhoadondientu@win-tech.vn"
+                        : "Trình ký thành công nhưng gửi email thất bại (kiểm tra log server)."
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { status = 0, message = ex.Message });
+            }
+        }
+
+
+        /// <summary>
+        /// Đề xuất tạo / phát hành mẫu hóa đơn (Job): Đẩy trạng thái 0 → 101.
+        /// Truyền đầy đủ ReferenceID (contract OID), FactorID, EntryID và các field tùy chọn.
+        /// </summary>
+        [HttpPost("propose-template")]
+        public async Task<IActionResult> ProposeTemplate([FromBody] EContractJobRequest model)
+        {
+            var userId = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return StatusCode(StatusCodes.Status401Unauthorized, new { status = 0, message = "Phiên đăng nhập hết hạn, vui lòng đăng nhập lại." });
+
+            if (model == null)
+                return BadRequest(new { status = 0, message = "Body request không được để trống." });
+
+            // Validation các field bắt buộc (giống Odoo API cũ)
+            if (string.IsNullOrWhiteSpace(model.ReferenceID) ||
+                string.IsNullOrWhiteSpace(model.FactorID)    ||
+                string.IsNullOrWhiteSpace(model.EntryID))
+                return BadRequest(new { status = 0, message = "Thiếu thông tin bắt buộc: ReferenceID, FactorID, EntryID." });
+
+            try
+            {
+                var (success, message) = await _econtractService.ProposeTemplateAsync(model, userId);
+                return success
+                    ? Ok(new { status = 1, message })
+                    : BadRequest(new { status = 0, message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { status = 0, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Phát hành mẫu hóa đơn (Job): Đẩy trạng thái 101 → 201.
+        /// Chỉ cần truyền OID.
+        /// </summary>
+        [HttpPost("issue-invoice")]
+        public async Task<IActionResult> IssueInvoice([FromBody] ApprovalWorkflowRequest model)
+        {
+            var userId = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return StatusCode(StatusCodes.Status401Unauthorized, new { status = 0, message = "Phiên đăng nhập hết hạn, vui lòng đăng nhập lại." });
+
+            if (string.IsNullOrWhiteSpace(model.OID))
+                return BadRequest(new { status = 0, message = "OID không được để trống." });
+
+            try
+            {
+                var (success, message) = await _econtractService.IssueInvoiceAsync(model, userId);
+                return success
+                    ? Ok(new { status = 1, message })
+                    : BadRequest(new { status = 0, message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { status = 0, message = ex.Message });
+            }
+        }
+
+
+        #endregion
+
+
     }
 }
 

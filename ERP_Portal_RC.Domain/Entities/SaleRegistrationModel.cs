@@ -20,5 +20,6 @@ namespace ERP_Portal_RC.Domain.Entities
         public bool IsCreateAccount { get; set; } 
         public string? LoginName { get; set; }
         public string? Password { get; set; }
+        public string? RegistrationCode { get; set; }    
     }
 }

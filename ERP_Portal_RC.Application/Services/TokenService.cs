@@ -168,7 +168,6 @@ namespace ERP_Portal_RC.Application.Services
 
             var claims = new List<Claim>
                 {
-                    // Sử dụng các thông tin từ bảng TechnicalUsers
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new Claim(ClaimTypes.Name, user.Username),
                     new Claim(JwtRegisteredClaimNames.Jti, jwtId),

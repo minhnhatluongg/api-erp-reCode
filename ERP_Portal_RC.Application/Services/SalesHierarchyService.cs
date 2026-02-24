@@ -14,10 +14,12 @@ namespace ERP_Portal_RC.Application.Services
     {
         private readonly ISalesHierarchyRepository _salesHierarchyRepository;
         private readonly ICustomStore _customStore;
-        public SalesHierarchyService(ISalesHierarchyRepository salesHierarchyRepository, ICustomStore customStore)
+        private readonly IRegistrationCodeService _registrationCodeService;
+        public SalesHierarchyService(ISalesHierarchyRepository salesHierarchyRepository, ICustomStore customStore, IRegistrationCodeService registrationCodeService)
         {
             _salesHierarchyRepository = salesHierarchyRepository;
             _customStore = customStore;
+            _registrationCodeService = registrationCodeService;
         }
         public async Task<List<ManagerDto>> GetManagerTreeAsync(string clnID, bool isManager)
         {
@@ -69,7 +71,12 @@ namespace ERP_Portal_RC.Application.Services
             {
                 throw new ArgumentException("FullName, Email are required fields.");
             }
-
+            var isValid = await _registrationCodeService.ValidateCodeAsync(request.RegistrationCode);
+            if (!isValid)
+            {
+                throw new ArgumentException("Mã đăng ký không hợp lệ, đã được sử dụng hoặc hết hạn.");
+            }
+            await _registrationCodeService.ValidateAndUseCodeAsync(request.RegistrationCode, request.Email);
             if (request.IsCreateAccount)
             {
                 if (request.LoginName?.Length < 5) throw new Exception("Tên đăng nhập phải từ 5 ký tự.");
@@ -100,7 +107,8 @@ namespace ERP_Portal_RC.Application.Services
             return new RegistrationResultDto
             {
                 NewEmployeeID = newEmplId,
-                NewUserCode = newUserCode
+                NewUserCode = newUserCode,
+                CodeLogin = request.RegistrationCode,
             };
         }
 

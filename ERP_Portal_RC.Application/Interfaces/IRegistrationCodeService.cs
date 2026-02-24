@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Domain.Entities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,6 +24,8 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<bool> ValidateCodeAsync(string code);
 
         Task<bool> ValidateAndUseCodeAsync(string code, string email);
+        //
+        Task<IEnumerable<RegistertrationCodes>> GetUserCodesAsync(int userId);
 
     }
 }

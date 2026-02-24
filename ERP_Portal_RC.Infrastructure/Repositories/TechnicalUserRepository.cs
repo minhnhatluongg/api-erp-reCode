@@ -3,6 +3,7 @@ using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -66,6 +67,16 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 INSERT INTO TechnicalUsers (Username, PasswordHash, FullName, IsActive, CreatedAt)
                 VALUES (@Username, @PasswordHash, @FullName, @IsActive, @CreatedAt);";
             await connection.ExecuteAsync(insertQuery, user);
+        }
+
+        public async Task<IEnumerable<RegistertrationCodes>> GetCodesByUserIdAsync(int userId)
+        {
+            using var connection = _dbConnectionFactory.OpenConnection(BosOnlinedb);
+            return await connection.QueryAsync<RegistertrationCodes>(
+                "[dbo].[sp_GetRegistrationCodesByUserId]",
+                new { UserId = userId },
+                commandType: CommandType.StoredProcedure
+            );
         }
     }
 }
