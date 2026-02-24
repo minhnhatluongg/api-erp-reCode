@@ -1,6 +1,7 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
+using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -72,6 +73,25 @@ namespace API.ERP_Portal_RC.Controllers
             }
 
             return Ok(ApiResponse.SuccessResponse("Mã đăng ký hợp lệ. Bạn có thể tiếp tục đăng ký."));
+        }
+
+        [Authorize(Roles = "Technical")]
+        [HttpGet("my-codes")]
+        public async Task<IActionResult> GetMyCodes()
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim))
+                return Unauthorized(ApiResponse.ErrorResponse("Không tìm thấy thông tin định danh.", 401));
+
+            try
+            {
+                var codes = await _codeService.GetUserCodesAsync(int.Parse(userIdClaim));
+                return Ok(ApiResponse<IEnumerable<RegistertrationCodes>>.SuccessResponse(codes, "Lấy danh sách mã thành công."));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse.ErrorResponse($"Lỗi: {ex.Message}"));
+            }
         }
     }
 }

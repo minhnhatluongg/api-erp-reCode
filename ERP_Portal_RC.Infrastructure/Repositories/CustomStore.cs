@@ -16,7 +16,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         {
             _dbConnectionFactory = dbConnectionFactory;
         }
-
+        //Truyền vào mã Group List của User. Lấy về danh sách các ApplicationTool mà Group đó được phép truy cập.
         public async Task<IEnumerable<ApplicationUser>> FindByLoginNameAsync(string loginName)
         {
             SqlConnection? connection = null;

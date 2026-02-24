@@ -14,5 +14,32 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<ListEcontractViewModel> GetAllList(string crtUser, string dateStart, string dateEnd);
         Task<ListEcontractViewModel> CountList(string crtUser, string dateStart, string dateEnd);
         Task CreateLog(string message, string userCode);
+        Task<limitGHCNKD> CheckBCTT(string cmpnID , string saleID, string group);
+        Task<List<string>> GetListOIDHasDetails(List<string> oids);
+
+        // Hàm này là hàm Task<ListEcontractViewModel> SelectedCB trong ERP cũ
+        Task<ListEcontractViewModel> GetEContractsByHierarchyAsync(string search, string emplChild, string dateStart, string dateEnd, string currentUserCode);
+
+        Task<int> ExecuteApprovalWorkflow(ApprovalWorkflowRequest model, (string Factor, string Entry, int NextStep, string Sp) config, string userId);
+
+        /// <summary>Lấy thông tin hợp đồng (CusTax, CusName) để gửi email.</summary>
+        Task<(string CusTax, string CusName)> GetContractInfoForEmailAsync(string oid);
+
+        /// <summary>
+        /// Gọi Ins_EContractJobs_RequestByOdoo (trong BosOnline): tạo Job record + gọi zsgn_EContractJobs_NOR nội bộ.
+        /// Dùng cho propose-template: contract OID 0 -> 101.
+        /// </summary>
+        Task<(bool success, string message)> CreateEContractJobAsync(
+            ERP_Portal_RC.Domain.Entities.EContractJobRequest request, string userId);
+
+        /// <summary>
+        /// Tìm job OID từ contract OID rồi gọi zsgn_EContractJobs_NOR để nâng trạng thái.
+        /// Dùng cho issue-invoice: job 101 -> 201.
+        /// </summary>
+        Task<(bool success, string message)> AdvanceEContractJobSigningAsync(
+            string contractOid, string factorId, string entryId,
+            string userId, int fromSignNumb, int toSignNumb, string? appvMess = null);
+
+        Task<Template> GetTemplateByCodeAsync(string factorId);
     }
 }

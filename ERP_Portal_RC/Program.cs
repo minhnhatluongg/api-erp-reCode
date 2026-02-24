@@ -1,3 +1,4 @@
+using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Application.Mappings;
 using ERP_Portal_RC.Application.Services;
@@ -35,6 +36,8 @@ builder.Services.AddAutoMapper(new[] {
 });
 
 // Đăng ký Application Services
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();

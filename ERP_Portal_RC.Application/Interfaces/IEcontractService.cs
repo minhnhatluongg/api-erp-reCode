@@ -24,5 +24,20 @@ namespace ERP_Portal_RC.Application.Interfaces
             string grpList,
             bool isManager,
             ContractSearchRequest request);
+        //Get all EContracts with filters
+        Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string userCode, string groupList);
+
+        //Trình kí / Yêu cầu phát hành mẫu / Phát Hành Mẫu
+        Task<(bool success, bool emailSent)> ProposeSignContractAsync(ApprovalWorkflowRequest model, string userId, string saleFullName);
+        Task<(bool success, string message)> ProposeTemplateAsync(ERP_Portal_RC.Domain.Entities.EContractJobRequest request, string userId);
+        Task<(bool success, string message)> IssueInvoiceAsync(ApprovalWorkflowRequest model, string userId);
+
+        //Lấy template 
+        Task<Template?> GetTemplateByCodeAsync(string factorId);
+
+        // 3 Phương thức cụ thể bạn yêu cầu (Hardcode logic sẽ nằm trong Implementation)
+        Task<Template?> GetOriginalContractAsync();      // factorId: TT78_EContract
+        Task<Template?> GetCompensationContractAsync();  // factorId: TT78_EContractExt
+        Task<Template?> GetExtensionContractAsync();     // factorId: TT78_EContractExt1
     }
 }
