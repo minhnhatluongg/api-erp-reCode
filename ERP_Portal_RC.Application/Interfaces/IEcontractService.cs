@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using System;
 using System.Collections.Generic;
@@ -39,5 +40,9 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<Template?> GetOriginalContractAsync();      // factorId: TT78_EContract
         Task<Template?> GetCompensationContractAsync();  // factorId: TT78_EContractExt
         Task<Template?> GetExtensionContractAsync();     // factorId: TT78_EContractExt1
+
+        Task<ApiResponse<string>> GenerateContractPreviewAsync(ContractPreviewRequest request);
+        Task<ApiResponse<string>> ProcessSaveContractAsync(ContractPreviewRequest request, string userCode);
+        Task<ContractStatusResponse> GetContractReviewDataAsync(string oid);
     }
 }

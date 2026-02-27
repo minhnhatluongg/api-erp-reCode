@@ -6,6 +6,7 @@ using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Transactions;
 
 namespace API.ERP_Portal_RC.Controllers
 {
@@ -132,7 +133,6 @@ namespace API.ERP_Portal_RC.Controllers
             {
                 Template? template = null;
 
-                // 1. Điều hướng Service dựa trên tham số type
                 switch (type.ToLower())
                 {
                     case "original":
@@ -167,6 +167,31 @@ namespace API.ERP_Portal_RC.Controllers
                     $"Lỗi hệ thống: {ex.Message}",
                     500));
             }
+        }
+
+        /// API xem trước hợp đồng (Preview) trước khi lưu
+        /// <param name="request">Dữ liệu nháp từ các bước nhập liệu trên FE</param>
+        [HttpPost("generate-preview")]
+        public async Task<ActionResult<ApiResponse<string>>> GeneratePreview([FromBody] ContractPreviewRequest request)
+        {
+            if (request == null)
+            {
+                return BadRequest(ApiResponse<string>.ErrorResponse("Dữ liệu yêu cầu không được để trống.", 400));
+            }
+
+            if (string.IsNullOrEmpty(request.FactorID))
+            {
+                return BadRequest(ApiResponse<string>.ErrorResponse("Vui lòng chọn loại mẫu hợp đồng (FactorID).", 400));
+            }
+
+            var result = await _econtractService.GenerateContractPreviewAsync(request);
+
+            // 3. Trả về kết quả dựa trên trạng thái xử lý của Service
+            if (!result.Success)
+            {
+                return StatusCode(result.StatusCode, result);
+            }
+            return Ok(result);
         }
 
         #region Trình kí / Yêu cầu Phát hành / Phát Hành Mẫu
@@ -210,7 +235,6 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
-
         /// <summary>
         /// Đề xuất tạo / phát hành mẫu hóa đơn (Job): Đẩy trạng thái 0 → 101.
         /// Truyền đầy đủ ReferenceID (contract OID), FactorID, EntryID và các field tùy chọn.
@@ -248,7 +272,9 @@ namespace API.ERP_Portal_RC.Controllers
         /// Phát hành mẫu hóa đơn (Job): Đẩy trạng thái 101 → 201.
         /// Chỉ cần truyền OID.
         /// </summary>
+        /// 
         [HttpPost("issue-invoice")]
+        [ApiExplorerSettings(IgnoreApi = true)] 
         public async Task<IActionResult> IssueInvoice([FromBody] ApprovalWorkflowRequest model)
         {
             var userId = User.FindFirst("UserCode")?.Value;
@@ -271,9 +297,45 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
-
         #endregion
 
+
+        [HttpPost("save-and-approve")]
+        public async Task<IActionResult> SaveAndApprove([FromBody] ContractPreviewRequest request)
+        {
+            if (request == null || request.Details == null || !request.Details.Any())
+            {
+                return BadRequest(ApiResponse<string>.ErrorResponse("Dữ liệu hợp đồng không đầy đủ."));
+            }
+
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userCode))
+            {
+                return Unauthorized(ApiResponse<string>.ErrorResponse("Không tìm thấy mã người dùng trong Token.", 401));
+            }
+            var result = await _econtractService.ProcessSaveContractAsync(request, userCode);
+
+            if (!result.Success)
+            {
+                return StatusCode(500, result);
+            }
+
+            return Ok(result);
+        }
+
+        [HttpGet("get-status-summary")]
+        public async Task<IActionResult> GetStatusSummary(string oid)
+        {
+            if (string.IsNullOrEmpty(oid))
+                return BadRequest(new { status = 0, message = "OID không được để trống" });
+
+            var result = await _econtractService.GetContractReviewDataAsync(oid);
+
+            if (result == null)
+                return Ok(new { status = 0, message = "Không tìm thấy thông tin hợp đồng" });
+
+            return Ok(new { status = 1, data = result });
+        }
 
     }
 }

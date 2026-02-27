@@ -118,9 +118,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 "GetListBillDebtReceipt", parameters, commandType: CommandType.StoredProcedure);
 
         }
-
-
-
         public async Task<ListEcontractViewModel> GetEContractsByHierarchyAsync(
             string search, 
             string emplChild, 
@@ -142,7 +139,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
             var rootMonitor = (await multi.ReadAsync<EContract_Monitor>()).ToList();
             var subEmployees = (await multi.ReadAsync<SubEmpl>()).Where(s => s.EmployeeID != currentUserCode).ToList();
-
 
             // CASE 1: Xem tất cả cấp dưới trực tiếp
             if (emplChild == currentUserCode && search == currentUserCode)
@@ -239,7 +235,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
         public async Task<int> ExecuteApprovalWorkflow(ApprovalWorkflowRequest model, (string Factor, string Entry, int NextStep, string Sp) config, string userId)
         {
-            // Sử dụng dapper và connection factory
             using var conn = _dbConnectionFactory.GetConnection("BosApproval");
             if (conn.State == ConnectionState.Closed) conn.Open();
             using var trans = conn.BeginTransaction();
@@ -247,7 +242,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             try
             {
                 // 1. Enrich Data: Lấy thông tin MST và SampleID từ DB nếu Model truyền lên bị trống
-                // Điều này giúp Frontend chỉ cần gửi OID là đủ chạy nghiệp vụ
                 var queryInfo = @"SELECT CmpnID, CusTax, CmpnTax, SampleID 
                           FROM BosOnline.dbo.EContracts WHERE OID = @OID";
                 var contractInfo = await conn.QueryFirstOrDefaultAsync<dynamic>(queryInfo, new { OID = model.OID }, trans);
@@ -261,20 +255,17 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 p.Add("@Crt_User", userId);
                 p.Add("@nextSignNumb", config.NextStep);
                 p.Add("@holdSignNumb", config.NextStep == 201 ? 101 : 0);
-                p.Add("@Variant30", "1"); // '1' = SP dùng GETDATE() làm ngày ký
-
+                p.Add("@Variant30", "1"); 
                 // Phân nhánh Variant dựa trên nghiệp vụ Job hay EContract
                 if (config.Factor.StartsWith("JOB"))
                 {
                     p.Add("@DataTbl", "EContractJobs");
                     p.Add("@SignTble", "zsgn_EContractJobs");
-                    // SampleID: ưu tiên FE gửi lên, fallback lấy từ DB
                     p.Add("@Variant29", !string.IsNullOrEmpty(model.SampleID) ? model.SampleID : (string?)contractInfo?.SampleID);
                 }
                 else
                 {
                     p.Add("@SignTble", "zsgn_EContracts");
-                    // CusTax, CmpnTax, SampleID đều lấy từ DB (enrich)
                     p.Add("@Variant27", (string?)contractInfo?.CusTax);
                     p.Add("@Variant28", (string?)contractInfo?.CmpnTax ?? "0312303803");
                     p.Add("@Variant29", (string?)contractInfo?.SampleID);
@@ -294,7 +285,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 throw new Exception($"Lỗi thực thi Workflow: {ex.Message}");
             }
         }
-
         public async Task<(string CusTax, string CusName)> GetContractInfoForEmailAsync(string oid)
         {
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
@@ -308,16 +298,15 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return ((string)row.CusTax, (string)row.CusName);
         }
 
-
         public async Task<(bool success, string message)> CreateEContractJobAsync(
             ERP_Portal_RC.Domain.Entities.EContractJobRequest request, string userId)
         {
             const string spName = "Ins_EContractJobs_RequestByPortal";
+            //const string spName = "Ins_EContractJobs_RequestByOdoo";
 
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
             if (conn.State == ConnectionState.Closed) conn.Open();
 
-            // userId từ JWT ưu tiên hơn model.Crt_User
             var crtUser = !string.IsNullOrWhiteSpace(userId) ? userId
                         : request.Crt_User ?? string.Empty;
 
@@ -369,7 +358,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 if (result == null)
                     return (false, "SP không trả về kết quả.");
 
-                // Parse — hỗ trợ cả IDictionary (ExpandoObject) lẫn dynamic (Dapper row)
                 string oid = "", excStatus = "";
                 if (result is IDictionary<string, object> dict)
                 {
@@ -400,8 +388,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 throw new Exception($"Job đã tồn tại cho hợp đồng {request.ReferenceID} (SQL Duplicate: {ex.Message}).");
             }
         }
-
-
 
         public async Task<(bool success, string message)> AdvanceEContractJobSigningAsync(
             string contractOid, string factorId, string entryId,
@@ -476,6 +462,172 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             commandType: CommandType.StoredProcedure);
         }
 
+        public async Task<string> SaveFullContractAsync(EContractMaster master, List<EContractDetails> details)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+
+            var detailsTable = new DataTable();
+            // KHAI BÁO CỘT: Thứ tự phải trùng khớp 100% với SQL Type ở Bước 1
+            detailsTable.Columns.Add("ItemNo", typeof(int));          // 1
+            detailsTable.Columns.Add("OID", typeof(string));         // 2
+            detailsTable.Columns.Add("ItemID", typeof(string));      // 3
+            detailsTable.Columns.Add("ItemName", typeof(string));    // 4
+            detailsTable.Columns.Add("ItemUnit", typeof(string));    // 5
+            detailsTable.Columns.Add("ItemPrice", typeof(decimal));  // 6
+            detailsTable.Columns.Add("ItemQtty", typeof(decimal));   // 7
+            detailsTable.Columns.Add("ItemAmnt", typeof(decimal));   // 8
+            detailsTable.Columns.Add("VAT_Rate", typeof(decimal));   // 9
+            detailsTable.Columns.Add("VAT_Amnt", typeof(decimal));   // 10
+            detailsTable.Columns.Add("Sum_Amnt", typeof(decimal));   // 11
+            detailsTable.Columns.Add("Descrip", typeof(string));     // 12 
+            detailsTable.Columns.Add("InvcSign", typeof(string));    // 13
+            detailsTable.Columns.Add("InvcFrm", typeof(int));        // 14
+            detailsTable.Columns.Add("InvcEnd", typeof(int));        // 15
+            detailsTable.Columns.Add("invcSample", typeof(string));  // 16
+            detailsTable.Columns.Add("itemUnitName", typeof(string));// 17
+            detailsTable.Columns.Add("ItemPerBox", typeof(decimal)); // 18
+
+            int count = 1;
+            foreach (var d in details)
+            {
+                decimal amnt = d.ItemQtty * d.ItemPrice;
+                decimal vatAmnt = amnt * (d.VAT_Rate / 100);
+                string safeName = d.ItemName ?? ""; // Tránh NULL
+
+                detailsTable.Rows.Add(
+                    count++,                          // 1. ItemNo
+                    master.OID,                       // 2. OID
+                    d.ItemID ?? "",                   // 3. ItemID
+                    safeName,                         // 4. ItemName
+                    d.ItemUnit ?? "",                 // 5. ItemUnit
+                    d.ItemPrice,                      // 6. ItemPrice
+                    d.ItemQtty,                       // 7. ItemQtty
+                    amnt,                             // 8. ItemAmnt
+                    d.VAT_Rate,                       // 9. VAT_Rate
+                    vatAmnt,                          // 10. VAT_Amnt
+                    amnt + vatAmnt,                   // 11. Sum_Amnt
+                    safeName,                         // 12. Descrip (Dùng ItemName làm nội dung để không bị NULL)
+                    d.InvcSign ?? "",                 // 13. InvcSign
+                    d.InvcFrm,                        // 14. InvcFrm
+                    d.InvcEnd,                        // 15. InvcEnd
+                    d.InvcSample ?? "",               // 16. invcSample
+                    d.itemUnitName ?? d.ItemUnit,     // 17. itemUnitName
+                    d.ItemPerBox                      // 18. ItemPerBox
+                );
+            }
+
+            var parameters = new DynamicParameters();
+
+            parameters.Add("@CmpnID", master.CmpnID);
+            parameters.Add("@OID", master.OID);
+            parameters.Add("@ODate", master.ODate);
+            parameters.Add("@FactorID", master.FactorID);
+            parameters.Add("@EntryID", master.EntryID);
+            parameters.Add("@SaleEmID", master.SaleEmID);
+            parameters.Add("@CmpnName", master.CmpnName);
+            parameters.Add("@CmpnAddress", master.CmpnAddress);
+            parameters.Add("@CmpnContactAddress", master.CmpnContactAddress);
+            parameters.Add("@CmpnTax", master.CmpnTax);
+            parameters.Add("@CmpnTel", master.CmpnTel);
+            parameters.Add("@CmpnMail", master.CmpnMail);
+            parameters.Add("@CmpnPeople_Sign", master.CmpnPeople_Sign);
+            parameters.Add("@CmpnPosition_BySign", master.CmpnPosition_BySign); // Lưu ý tên field
+            parameters.Add("@CmpnBankNumber", master.CmpnBankNumber);
+            parameters.Add("@CmpnBankAddress", master.CmpnBankAddress);
+            parameters.Add("@SignDate", DateTime.Now);
+            parameters.Add("@TaxDepartment", master.TaxDepartment ?? "");
+            parameters.Add("@TinhThanhTitle", "");
+            parameters.Add("@Descript_Cus", master.Descript_Cus ?? "");
+
+            // Thông tin Khách hàng
+            parameters.Add("@CustomerID", master.CustomerID);
+            parameters.Add("@CusName", master.CusName);
+            parameters.Add("@RegionID", master.RegionID);
+            parameters.Add("@CusAddress", master.CusAddress);
+            parameters.Add("@CusContactAddress", master.CusContactAddress);
+            parameters.Add("@CusTax", master.CusTax);
+            parameters.Add("@CusTel", master.CusTel);
+            parameters.Add("@CusFax", master.CusFax);
+            parameters.Add("@CusEmail", master.CusEmail);
+            parameters.Add("@CusPeople_Sign", master.CusPeople_Sign);
+            parameters.Add("@CusPosition_BySign", master.CusPosition_BySign);
+            parameters.Add("@CusBankNumber", master.CusBankNumber);
+            parameters.Add("@CusBankAddress", master.CusBankAddress);
+            parameters.Add("@CmpID_Sign", master.CmpID_Sign ?? "");
+            parameters.Add("@CmpName_Sign", master.CmpName_Sign ?? "");
+            parameters.Add("@isUsingAcc", 0);
+            parameters.Add("@SignNumb",-1);
+
+            // Thông tin Tiền tệ & Hệ thống
+            parameters.Add("@PrdcAmnt", master.PrdcAmnt);
+            parameters.Add("@VAT_Rate", master.VAT_Rate);
+            parameters.Add("@VAT_Amnt", master.VAT_Amnt);
+            parameters.Add("@IsVAT", 1);
+            parameters.Add("@DscnAmnt", master.DscnAmnt);
+            parameters.Add("@Sum_Amnt", master.Sum_Amnt);
+            parameters.Add("@SampleID", master.SampleID);
+            parameters.Add("@HTMLContent", master.HTMLContent);
+            parameters.Add("@Descrip", master.Descrip);
+            parameters.Add("@Crt_User", master.Crt_User);
+            parameters.Add("@ChgeUser", master.ChgeUser);
+
+            // Các trường bổ sung mới
+            parameters.Add("@CusWebsite", master.CusWebsite);
+            parameters.Add("@Date_BusLicence", master.Date_BusLicence);
+            parameters.Add("@OIDContract", master.OIDContract);
+            parameters.Add("@RefeContractDate", master.RefeContractDate);
+
+            // Các flags
+            parameters.Add("@IsCapBu", master.IsCapBu);
+            parameters.Add("@IsGiaHan", master.IsGiaHan);
+            parameters.Add("@IsOnline", master.IsOnline);
+            parameters.Add("@isTT78", master.IsTT78);
+
+            // 3. Add tham số Table Details
+            parameters.Add("@Details", detailsTable.AsTableValuedParameter("dbo.EContractDetailType"));
+
+            // Thực thi
+            await conn.ExecuteAsync("dbo.sp_EContract_InsertAll", parameters, commandType: CommandType.StoredProcedure);
+            return master.OID;
+        }
+
+        public async Task CreateApprovalFlowAsync(EContractMaster master)
+        {
+            using var conn = _dbConnectionFactory.GetConnection("BosApproval");
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@FactorID", master.FactorID);
+            parameters.Add("@OID", master.OID);
+            parameters.Add("@ODate", master.ODate.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"));
+            parameters.Add("@CmpnID", master.CmpnID);
+            parameters.Add("@Crt_User", master.Crt_User);
+            parameters.Add("@DataTbl", string.Empty);
+            parameters.Add("@SignTble", "zsgn_EContracts");
+            parameters.Add("@SignChck", 0);
+            parameters.Add("@holdSignNumb", 0);
+            parameters.Add("@nextSignNumb", 0);
+            parameters.Add("@Variant22", string.Empty);
+            parameters.Add("@Variant26", string.Empty);
+            parameters.Add("@Variant27", master.CusTax ?? string.Empty); 
+            parameters.Add("@Variant28", master.CmpnTax ?? string.Empty); 
+            parameters.Add("@Variant29", master.SampleID ?? "0010");      
+            parameters.Add("@EntryID", master.EntryID ?? "EC:001");
+            parameters.Add("@AppvMess", ".");
+
+            try
+            {
+                await conn.ExecuteAsync(
+                    "dbo.zsgn_webContracts_NOR",
+                    parameters,
+                    commandType: CommandType.StoredProcedure
+                );
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Lỗi khi tạo luồng phê duyệt cho OID {master.OID}: {ex.Message}");
+            }
+        }
+
         #region Helper
         private void MapEContractStatus(List<EContract_Monitor> list, string currentCrtUser)
         {
@@ -519,6 +671,25 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         }
 
         #endregion
+
+        public async Task<EContractStatusRaw> GetContractStatusRawAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            var result = new EContractStatusRaw();
+
+            using (var multi = await conn.QueryMultipleAsync("dbo.sp_EContract_GetStatusSummary",
+                   new { OID = oid },
+                   commandType: CommandType.StoredProcedure))
+            {
+                result.Master = await multi.ReadFirstOrDefaultAsync<EContractMasterSummary>();
+                if (result.Master == null) return null;
+
+                result.Details = (await multi.ReadAsync<EContractDetailSummary>()).ToList();
+
+                result.SignedData = await multi.ReadFirstOrDefaultAsync<ContractPublicInfoSummary>();
+            }
+            return result;
+        }
 
     }
 }

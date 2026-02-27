@@ -1,12 +1,18 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
+using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.IO.Compression;
 using System.Linq;
+using System.Security;
 using System.Text;
 using System.Threading.Tasks;
+using System.Transactions;
+using System.Xml;
+using System.Xml.Xsl;
 using static ERP_Portal_RC.Domain.Enum.PublicEnum;
 
 namespace ERP_Portal_RC.Application.Services
@@ -250,7 +256,22 @@ namespace ERP_Portal_RC.Application.Services
         {
             return await _eContractRepository.GetTemplateByCodeAsync("TT78_EContractExt1");
         }
+        public async Task<ApiResponse<string>> GenerateContractPreviewAsync(ContractPreviewRequest request)
+        {
+            var template = await _eContractRepository.GetTemplateByCodeAsync(request.FactorID);
+            if (template == null)
+                return ApiResponse<string>.ErrorResponse("Không tìm thấy mẫu hợp đồng!", 404);
 
+            try
+            {
+                string htmlResult = ProcessContractMapping(template, request);
+                return ApiResponse<string>.SuccessResponse(htmlResult, "Tạo bản xem trước thành công");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<string>.ErrorResponse($"Lỗi xử lý template: {ex.Message}", 500);
+            }
+        }
         #region Helper
         public string FormatCurrency(decimal? number)
         {
@@ -258,8 +279,331 @@ namespace ERP_Portal_RC.Application.Services
             string a = string.Format(culture, "{0:N0}", number);
             return a;
         }
-        #endregion
+        private string ProcessContractMapping(Template template, ContractPreviewRequest request)
+        {
+            // --- BƯỚC 1: BUILD DANH SÁCH SẢN PHẨM {ProductLines} ---
+            var sbProducts = new StringBuilder();
+            decimal sumTotal = 0;
 
+            if (request.Details != null && request.Details.Any())
+            {
+                int idx = 1;
+                foreach (var detail in request.Details)
+                {
+                    decimal totalItem = detail.Qtty * detail.Price;
+                    sumTotal += totalItem;
+
+                    string escapedName = SecurityElement.Escape(detail.ItemName ?? "");
+                    string unit = (detail.Unit ?? "").Trim();
+
+                    sbProducts.Append("<HHDVu>");
+                    sbProducts.Append($"<STT>{idx++}</STT>");
+
+                    // Bao phủ đầy đủ các thẻ mà XSLT có thể truy vấn
+                    sbProducts.Append($"<THHDVu>{escapedName}</THHDVu><ItemName>{escapedName}</ItemName><itemName>{escapedName}</itemName>");
+                    sbProducts.Append($"<DVTinh>{unit}</DVTinh><itemUnitName>{unit}</itemUnitName><ItemUnit>{unit}</ItemUnit>");
+                    sbProducts.Append($"<SLuong>{detail.Qtty}</SLuong><ItemQtty>{detail.Qtty}</ItemQtty><itemQtty>{detail.Qtty}</itemQtty>");
+                    sbProducts.Append($"<DGia>{detail.Price}</DGia><ItemPrice>{detail.Price}</ItemPrice><itemPrice>{detail.Price}</itemPrice>");
+                    sbProducts.Append($"<ThTien>{totalItem}</ThTien><Sum_Amnt>{totalItem}</Sum_Amnt><sum_Amnt>{totalItem}</sum_Amnt>");
+
+                    // Thông tin bổ sung cho bảng kê
+                    sbProducts.Append($"<MSo>{detail.InvcSample}</MSo><invcSample>{detail.InvcSample}</invcSample>");
+                    sbProducts.Append($"<KHieu>{detail.InvcSign}</KHieu><InvcSign>{detail.InvcSign}</InvcSign>");
+                    sbProducts.Append($"<TSo>{detail.InvcFrm}</TSo><invcFrm>{detail.InvcFrm}</invcFrm>");
+                    sbProducts.Append($"<DSo>{detail.InvcEnd}</DSo><invcEnd>{detail.InvcEnd}</invcEnd>");
+
+                    sbProducts.Append("</HHDVu>");
+                }
+            }
+
+            // --- BƯỚC 2: REPLACE PLACEHOLDER VÀO XML TEMPLATE ---
+            DateTime now = DateTime.Now;
+            string finalXml = template.XmlContent ?? "";
+
+            finalXml = finalXml
+                .Replace("{order_code}", request.OrderCode ?? "ĐANG TẠO")
+                .Replace("{order_date_day}", now.Day.ToString("00"))
+                .Replace("{order_date_month}", now.Month.ToString("00"))
+                .Replace("{order_date_year}", now.Year.ToString())
+                .Replace("{partner_name}", SecurityElement.Escape(request.PartnerName ?? ""))
+                .Replace("{partner_vat}", request.PartnerVat ?? "")
+                .Replace("{partner_address}", SecurityElement.Escape(request.PartnerAddress ?? ""))
+                .Replace("{partner_phone}", request.PartnerPhone ?? "")
+                .Replace("{partner_email}", request.PartnerEmail ?? "")
+                .Replace("{partner_bank_no}", request.PartnerBankNo ?? "")
+                .Replace("{partner_bank_title}", request.PartnerBankAddress ?? "")
+                .Replace("{partner_contact_name}", SecurityElement.Escape(request.PartnerContactName ?? ""))
+                .Replace("{partner_contact_job}", request.PartnerContactJob ?? "")
+                .Replace("{partner_legal_value}", request.PartnerContactJob ?? "")
+                .Replace("{ProductLines}", sbProducts.ToString())
+                .Replace("{TgTTTBSo}", sumTotal.ToString("0"))
+                .Replace("{TgTTTBChu}", NumberToText(sumTotal)); 
+
+            // --- BƯỚC 3: LÀM SẠCH XSLT (FIX LỖI "Stylesheet must start...") ---
+            string xsltContent = (template.XsltContent ?? "").Trim();
+            int firstTagIndex = xsltContent.IndexOf("<");
+            if (firstTagIndex > 0)
+            {
+                xsltContent = xsltContent.Substring(firstTagIndex);
+            }
+
+            // --- BƯỚC 4: TRANSFORM XML -> HTML ---
+            var transformer = new XslCompiledTransform();
+            using (var srXslt = new StringReader(xsltContent))
+            using (var xrXslt = XmlReader.Create(srXslt))
+            {
+                transformer.Load(xrXslt, new XsltSettings(true, true), new XmlUrlResolver());
+            }
+
+            var sbResult = new StringBuilder();
+            using (var srXml = new StringReader(finalXml))
+            using (var xrXml = XmlReader.Create(srXml))
+            using (var sw = new StringWriter(sbResult))
+            {
+                transformer.Transform(xrXml, null, sw);
+            }
+
+            return sbResult.ToString();
+        }
+
+        public string NumberToText(decimal total)
+        {
+            try
+            {
+                if (total == 0) return "Không đồng chẵn./.";
+
+                string[] unit = { "", " nghìn", " triệu", " tỷ", " nghìn tỷ" };
+                string[] digits = { "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín" };
+                string result = "";
+                long number = (long)Math.Abs(total);
+                int unitIndex = 0;
+
+                while (number > 0)
+                {
+                    int group = (int)(number % 1000);
+                    if (group > 0)
+                    {
+                        string groupText = "";
+                        int h = group / 100;
+                        int t = (group % 100) / 10;
+                        int u = group % 10;
+
+                        // Đọc hàng trăm
+                        if (h > 0 || number > 1000) groupText += digits[h] + " trăm ";
+
+                        // Đọc hàng chục (mươi/mười/lẻ)
+                        if (t > 1) groupText += digits[t] + " mươi ";
+                        else if (t == 1) groupText += "mười ";
+                        else if (h > 0 && u > 0) groupText += "lẻ ";
+
+                        // Đọc hàng đơn vị (mốt/lăm)
+                        if (t > 1 && u == 1) groupText += "mốt ";
+                        else if (t > 0 && u == 5) groupText += "lăm ";
+                        else if (u > 0) groupText += digits[u] + " ";
+
+                        result = groupText + unit[unitIndex] + " " + result;
+                    }
+                    number /= 1000;
+                    unitIndex++;
+                }
+
+                result = result.Trim().Replace("  ", " ");
+                return char.ToUpper(result[0]) + result.Substring(1);
+            }
+            catch { return "Lỗi đọc số"; }
+        }
+
+        private EContractMaster MapToMaster(ContractPreviewRequest req, string user)
+        {
+            return new EContractMaster
+            {
+                OID = req.OrderCode,
+                CmpnID = "26",
+                CmpnName = req.CmpnName,
+                CmpnAddress = req.CmpnAddress,
+                CmpnContactAddress = req.CmpnContactAddress,
+                CmpnTax = req.CmpnTax ?? "0312303803",
+                CmpnTel = req.CmpnTel,
+                CmpnMail = req.CmpnMail,
+                CmpnPeople_Sign = req.CmpnPeople_Sign,
+                CmpnPosition_BySign = req.CmpnPosition_Sign ?? "Giám Đốc", // Lưu ý: BySign
+                CmpnBankAddress = req.CmpnBankAddress,
+                CmpnBankNumber = req.CmpnBankNumber,
+                FactorID = req.FactorID ?? "EContract",
+                SampleID = req.SampleID ?? "0783",
+                EntryID = "EC:001",
+                SaleEmID = user,
+                CusName = req.PartnerName,
+                RegionID = "",
+                CusAddress = req.PartnerAddress ?? "",
+                CusContactAddress = req.PartnerAddress ?? "",
+                CusTax = req.PartnerVat ?? "",
+                CusTel = req.PartnerPhone ?? "",
+                CusEmail = req.PartnerEmail ?? "",
+                CusPeople_Sign = req.PartnerContactName, 
+                CusPosition_BySign = req.PartnerContactJob ?? "Giám Đốc",
+                CusBankAddress = req.PartnerBankAddress ?? "",
+                CusBankNumber = req.PartnerBankNo ?? "",
+                CustomerID = "",
+                Crt_User = user,
+                ChgeUser = user,
+                IsOnline = true,
+                IsTT78 = true,
+                PrdcAmnt = 0,
+                VAT_Rate = 0,
+                VAT_Amnt = 0,
+                DscnAmnt = 0,
+                Sum_Amnt = 0,
+                ODate = DateTime.Now,
+                ReferenceDate = DateTime.Now,
+                ReferenceID = "",
+                HTMLContent = req.HTMLContent ?? "UE9TVCBPSw==",
+                Descrip = req.Descrip ?? "Created From NEX-ERP",
+                SignDate = DateTime.Now,
+                SignNumb = -1,
+            };
+        }
+
+        private List<EContractDetails> MapToDetails(ContractPreviewRequest req)
+        {
+            return req.Details.Select((d, index) =>
+            {
+                decimal.TryParse(d.VAT_Rate, out decimal vatRateValue);
+
+                decimal amount = d.Qtty * d.Price;
+                decimal vatAmount = amount * (vatRateValue / 100);
+                decimal sumAmount = amount + vatAmount;
+
+                return new EContractDetails
+                {
+                    ItemID = d.ItemID, 
+                    ItemName = d.ItemName,
+                    ItemUnit = d.Unit,
+                    ItemPrice = d.Price,
+                    ItemQtty = d.Qtty,
+                    ItemAmnt = amount,
+                    VAT_Rate = vatRateValue, 
+                    VAT_Amnt = vatAmount,
+                    Sum_Amnt = sumAmount,
+                    InvcSample = d.InvcSample,
+                    InvcSign = d.InvcSign,
+                    InvcFrm = d.InvcFrm,
+                    InvcEnd = d.InvcEnd,
+                    itemUnitName = d.Unit,
+                    ItemNo = index + 1,
+                    ItemPerBox = 0,
+                    isKM = false, 
+                    sl_KM = 0
+                };
+            }).ToList();
+        }
+        private string DecompressGZip(byte[] gzipData)
+        {
+            if (gzipData == null || gzipData.Length == 0) return string.Empty;
+            try
+            {
+                using var mStream = new MemoryStream(gzipData);
+                using var gStream = new GZipStream(mStream, CompressionMode.Decompress);
+                using var reader = new StreamReader(gStream, Encoding.UTF8);
+                return reader.ReadToEnd();
+            }
+            catch { return string.Empty; }
+        }
+
+        #endregion
+        public async Task<ApiResponse<string>> ProcessSaveContractAsync(ContractPreviewRequest request, string userCode)
+        {
+            try
+            {
+                var master = MapToMaster(request, userCode);
+                var details = MapToDetails(request);
+
+                await _eContractRepository.SaveFullContractAsync(master, details);
+
+                return ApiResponse<string>.SuccessResponse(
+                    master.OID,
+                    "Lưu hợp đồng và khởi tạo luồng phê duyệt thành công."
+                );
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<string>.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 500);
+            }
+        }
+
+        public async Task<ContractStatusResponse> GetContractReviewDataAsync(string oid)
+        {
+            var raw = await _eContractRepository.GetContractStatusRawAsync(oid);
+            if (raw == null || raw.Master == null) return null;
+
+            var response = new ContractStatusResponse
+            {
+                Oid = oid,
+                CustomerName = raw.Master.CustomerName,
+                CustomerTaxCode = raw.Master.CustomerTaxCode,
+                IsSigned = raw.SignedData != null,
+
+                Master = new ERP_Portal_RC.Application.DTOs.EContractMasterSummary
+                {
+                    CusAddress = raw.Master.CusAddress,
+                    CusWebsite = raw.Master.CusWebsite,
+                    CusTel = raw.Master.CusTel,
+                    CusEmail = raw.Master.CusEmail,
+                    CusPeople_Sign = raw.Master.CusPeople_Sign,
+                    CusPosition_BySign = raw.Master.CusPosition_BySign,
+                    CusBankAddress = raw.Master.CusBankAddress,
+                    CusBankNumber = raw.Master.CusBankNumber,
+                    Descrip = raw.Master.Descrip,
+                    Crt_Date = raw.Master.Crt_Date,
+                    Crt_User = raw.Master.Crt_User,
+                    ODate = raw.Master.ODate
+                },
+
+                Details = raw.Details.Select(d => new ERP_Portal_RC.Application.DTOs.EContractDetailSummary
+                {
+                    ItemID = d.ItemID,
+                    ItemName = d.ItemName,
+                    InvcSign = d.InvcSign,
+                    InvcSample = d.InvcSample,
+                    InvcFrm = d.InvcFrm,
+                    InvcEnd = d.InvcEnd,
+                    Price = d.Price,
+                    Qtty = d.Qtty,
+                    SumAmnt = d.SumAmnt
+                }).ToList()
+            };
+
+            if (raw.SignedData != null)
+            {
+                var info = raw.SignedData;
+                byte[] compressedData = null;
+
+                // Logic chọn cột: 
+                // A=0, B=1 (Chỉ bên B ký) -> Lấy InvcContent
+                // A=1, B=1 (Cả hai cùng ký) -> Lấy InvcContent_ByCus
+                if (!info.Party_A_IsSigned && info.Party_B_IsSigned)
+                    compressedData = info.InvcContent;
+                else if (info.Party_A_IsSigned && info.Party_B_IsSigned)
+                    compressedData = info.InvcContent_ByCus;
+
+                if (compressedData != null)
+                {
+                    string xmlContent = DecompressGZip(compressedData);
+
+                    byte[] xmlBytes = Encoding.UTF8.GetBytes(xmlContent);
+                    response.Base64Content = Convert.ToBase64String(xmlBytes);
+
+                    response.SignedInfo = new PublicInfoSummary
+                    {
+                        InvcDate = info.InvcDate,
+                        Party_A_IsSigned = info.Party_A_IsSigned,
+                        Party_B_IsSigned = info.Party_B_IsSigned
+                    };
+                }
+            }
+
+            return response;
+        }
     }
 }
 
