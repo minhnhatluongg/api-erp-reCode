@@ -41,5 +41,9 @@ namespace ERP_Portal_RC.Domain.Interfaces
             string userId, int fromSignNumb, int toSignNumb, string? appvMess = null);
 
         Task<Template> GetTemplateByCodeAsync(string factorId);
+
+        Task<string> SaveFullContractAsync(EContractMaster master, List<EContractDetails> details);
+        Task CreateApprovalFlowAsync(EContractMaster master);
+        Task<EContractStatusRaw> GetContractStatusRawAsync(string oid);
     }
 }
