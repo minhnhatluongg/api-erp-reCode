@@ -49,5 +49,7 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<(int Ok, string Message)> DeleteDraftAsync(string oid, string username);
         // Nghiệp vụ hủy ký (Yêu cầu Transaction)
         Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId);
+        //Nghiệp vụ lịch sử Job 
+        Task<EContractHistoryRaw> GetFullHistoryDataAsync(string oid);
     }
 }
