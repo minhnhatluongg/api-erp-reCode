@@ -17,5 +17,6 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<bool> ValidateAccessTokenAsync(string accessToken);
         /// Get user từ JWT token
         Task<ApplicationUser?> GetUserFromTokenAsync(string accessToken);
+        Task<int> CleanupTokensAsync();
     }
 }
