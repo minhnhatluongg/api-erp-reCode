@@ -292,5 +292,17 @@ namespace ERP_Portal_RC.Application.Services
                 return null;
             }
         }
+
+        public async Task<int> CleanupTokensAsync()
+        {
+            try
+            {
+                return await _authRepository.CleanupExpiredTokensAsync();
+            }
+            catch (Exception ex)
+            {
+                return 0;
+            }
+        }
     }
 }
