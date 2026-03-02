@@ -45,5 +45,9 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<string> SaveFullContractAsync(EContractMaster master, List<EContractDetails> details);
         Task CreateApprovalFlowAsync(EContractMaster master);
         Task<EContractStatusRaw> GetContractStatusRawAsync(string oid);
+        // Nghiệp vụ xóa nháp
+        Task<(int Ok, string Message)> DeleteDraftAsync(string oid, string username);
+        // Nghiệp vụ hủy ký (Yêu cầu Transaction)
+        Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId);
     }
 }

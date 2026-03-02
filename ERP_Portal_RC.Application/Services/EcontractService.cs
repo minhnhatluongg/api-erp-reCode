@@ -588,11 +588,19 @@ namespace ERP_Portal_RC.Application.Services
 
                 if (compressedData != null)
                 {
-                    string xmlContent = DecompressGZip(compressedData);
-
-                    byte[] xmlBytes = Encoding.UTF8.GetBytes(xmlContent);
-                    response.Base64Content = Convert.ToBase64String(xmlBytes);
-
+                    string base64FromGzip = DecompressGZip(compressedData);
+                    if(!string.IsNullOrEmpty(base64FromGzip))
+                    {
+                        try
+                        {
+                            byte[] xmlRawBytes = Convert.FromBase64String(base64FromGzip);
+                            response.Base64Content = Encoding.UTF8.GetString(xmlRawBytes);
+                        }
+                        catch (FormatException)
+                        {
+                            response.Base64Content = Convert.ToBase64String(Encoding.UTF8.GetBytes(base64FromGzip));
+                        }
+                    }
                     response.SignedInfo = new PublicInfoSummary
                     {
                         InvcDate = info.InvcDate,
@@ -601,8 +609,37 @@ namespace ERP_Portal_RC.Application.Services
                     };
                 }
             }
-
             return response;
+        }
+
+        public async Task<ApiResponse<object>> DeleteDraftAsync(string oid, string username)
+        {
+            try
+            {
+                var result = await _eContractRepository.DeleteDraftAsync(oid, username);
+                if (result.Ok == 1)
+                    return ApiResponse<object>.SuccessResponse(null, result.Message);
+
+                return ApiResponse<object>.ErrorResponse(result.Message);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi xóa nháp: " + ex.Message);
+            }
+        }
+
+        public async Task<ApiResponse<object>> UnSignAsync(UnSignRequest model)
+        {
+            string correlationId = Guid.NewGuid().ToString();
+            try
+            {
+                var result = await _eContractRepository.UnSignAsync(model, correlationId);
+                return ApiResponse<object>.SuccessResponse(result.Data, result.Message);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi hủy ký: " + ex.Message);
+            }
         }
     }
 }

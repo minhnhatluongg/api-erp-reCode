@@ -44,5 +44,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ApiResponse<string>> GenerateContractPreviewAsync(ContractPreviewRequest request);
         Task<ApiResponse<string>> ProcessSaveContractAsync(ContractPreviewRequest request, string userCode);
         Task<ContractStatusResponse> GetContractReviewDataAsync(string oid);
+        Task<ApiResponse<object>> DeleteDraftAsync(string oid, string username);
+        Task<ApiResponse<object>> UnSignAsync(UnSignRequest model);
     }
 }
