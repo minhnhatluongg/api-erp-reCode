@@ -428,7 +428,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 // Variant01-25: để rỗng
                 foreach (var i in Enumerable.Range(1, 25))
                     p.Add($"@Variant{i:D2}", "");
-                p.Add("@Variant26",      contractOid); // OIDJob (ReferenceID)
+                p.Add("@Variant26",      contractOid); 
                 p.Add("@Variant27",      "");
                 p.Add("@Variant28",      "");
                 p.Add("@Variant29",      "");
@@ -691,5 +691,66 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return result;
         }
 
+        public async Task<(int Ok, string Message)> DeleteDraftAsync(string oid, string username)
+        {
+            using var con = _dbConnectionFactory.GetConnection("BosOnline");
+            var p = new DynamicParameters();
+            p.Add("@OID", oid);
+            p.Add("@DeletedBy", username);
+            p.Add("@OK", dbType: DbType.Int32, direction: ParameterDirection.Output);
+            p.Add("@Message", dbType: DbType.String, size: 4000, direction: ParameterDirection.Output);
+
+            await con.ExecuteAsync("dbo.Del_EContract_Draft", p, commandType: CommandType.StoredProcedure);
+
+            return (p.Get<int>("@OK"), p.Get<string>("@Message"));
+        }
+
+        public async Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId)
+        {
+            using var con = _dbConnectionFactory.GetConnection("BosOnline");
+            if (con.State == ConnectionState.Closed) await ((System.Data.Common.DbConnection)con).OpenAsync();
+
+            using var trans = con.BeginTransaction();
+            try
+            {
+                // 1. Xóa thông tin trình ký
+                int delZsgn = await con.ExecuteAsync(
+                    "DELETE FROM BosApproval.dbo.zsgn_webContracts WHERE OID = @OID",
+                    new { model.OID }, trans);
+
+                // 2. Xóa thông tin Public (Hợp đồng đã ký)
+                int delPublic = await con.ExecuteAsync(
+                    "DELETE FROM BosControlEVAT.dbo.ECtr_PublicInfo WHERE InvcCode = @OID",
+                    new { model.OID }, trans);
+
+                string status = (delZsgn > 0 || delPublic > 0) ? "DELETED" : "NO_ACTION";
+                string msg = $"Kết quả: {delZsgn} dòng zsgn, {delPublic} dòng PublicInfo đã được xử lý.";
+
+                // 3. Ghi Log Unsign
+                await con.ExecuteAsync(@"
+                INSERT INTO BosControlEVAT.dbo.ECtr_UnsignLogs 
+                (OID, CorrelationId, Reason, RequestedBy, FullName, [Role], ActionStatus, ActionMessage)
+                VALUES (@OID, @CorrelationId, @Reason, @RequestedBy, @FullName, @Role, @status, @msg)",
+                    new
+                    {
+                        model.OID,
+                        CorrelationId = correlationId,
+                        model.Reason,
+                        model.RequestedBy,
+                        model.FullName,
+                        model.Role,
+                        status,
+                        msg
+                    }, trans);
+
+                trans.Commit();
+                return (true, msg, new { delZsgn, delPublic, status });
+            }
+            catch (Exception)
+            {
+                trans.Rollback();
+                throw; 
+            }
+        }
     }
 }

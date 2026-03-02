@@ -5,7 +5,10 @@ using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
 using ERP_Portal_RC.Infrastructure.Repositories;
+using Interface.ReleaseInvoice.Repo;
+using Interface.ReleaseInvoice.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
@@ -45,6 +48,7 @@ builder.Services.AddScoped<ISalesHierarchyService, SalesHierarchyService>();
 builder.Services.AddScoped<IDSignaturesService, DSignaturesService>();
 builder.Services.AddScoped<IEcontractService, EcontractService>();
 builder.Services.AddScoped<IRegistrationCodeService, RegistrationCodeService>();
+builder.Services.AddScoped<IInvoicePreviewService, InvoicePreviewService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -54,6 +58,10 @@ builder.Services.AddScoped<ISalesHierarchyRepository, SalesHierarchyRepository>(
 builder.Services.AddScoped<IDSignaturesRepository, DSignaturesRepository>();
 builder.Services.AddScoped<IEContractRepository, EContractRepository>();
 builder.Services.AddScoped<ITechnicalUserRepository, TechnicalUserRepository>();
+builder.Services.AddScoped<IRuleRepository,RuleRepository>();
+builder.Services.AddScoped<IXmlDataRepository, XmlDataRepository>();
+builder.Services.AddScoped<ITemplateRepository, TemplateRepository>();
+builder.Services.AddScoped<IContractCheckRepository, ContractCheckRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext

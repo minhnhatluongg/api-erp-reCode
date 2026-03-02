@@ -55,7 +55,7 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
-        /// API lấy danh sách hợp đồng chi tiết (Nếu cần tách riêng với Dashboard)
+        /// API lấy danh sách hợp đồng chi tiết 
         [HttpGet("listContract")]
         public async Task<ActionResult<ApiResponse<ListEcontractViewModel>>> GetListContract(
             [FromQuery] ContractSearchRequest request,
@@ -272,7 +272,6 @@ namespace API.ERP_Portal_RC.Controllers
         /// Phát hành mẫu hóa đơn (Job): Đẩy trạng thái 101 → 201.
         /// Chỉ cần truyền OID.
         /// </summary>
-        /// 
         [HttpPost("issue-invoice")]
         [ApiExplorerSettings(IgnoreApi = true)] 
         public async Task<IActionResult> IssueInvoice([FromBody] ApprovalWorkflowRequest model)
@@ -298,7 +297,6 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         #endregion
-
 
         [HttpPost("save-and-approve")]
         public async Task<IActionResult> SaveAndApprove([FromBody] ContractPreviewRequest request)
@@ -327,16 +325,33 @@ namespace API.ERP_Portal_RC.Controllers
         public async Task<IActionResult> GetStatusSummary(string oid)
         {
             if (string.IsNullOrEmpty(oid))
-                return BadRequest(new { status = 0, message = "OID không được để trống" });
+                return BadRequest(ApiResponse<object>.ErrorResponse("OID không được để trống."));
 
             var result = await _econtractService.GetContractReviewDataAsync(oid);
 
             if (result == null)
-                return Ok(new { status = 0, message = "Không tìm thấy thông tin hợp đồng" });
+                return Ok(ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin hợp đồng", 404));
 
-            return Ok(new { status = 1, data = result });
+            return Ok(ApiResponse<ContractStatusResponse>.SuccessResponse(result, "Lấy thông tin thành công."));
         }
 
+        [HttpDelete("draft/{oid}")]
+        public async Task<IActionResult> DeleteDraft(string oid)
+        {
+            string username = User.Identity?.Name ?? "system";
+            var result = await _econtractService.DeleteDraftAsync(oid, username);
+            return Ok(result);
+        }
+
+        [HttpPost("unsign")]
+        public async Task<IActionResult> UnSign([FromBody] UnSignRequest request)
+        {
+            if (string.IsNullOrEmpty(request.RequestedBy))
+                request.RequestedBy = User.Identity?.Name ?? "system";
+
+            var result = await _econtractService.UnSignAsync(request);
+            return Ok(result);
+        }
     }
 }
 
