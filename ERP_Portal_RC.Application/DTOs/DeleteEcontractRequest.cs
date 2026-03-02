@@ -8,6 +8,6 @@ namespace ERP_Portal_RC.Application.DTOs
 {
     public class DeleteEcontractRequest
     {
-        public string? OID { get; set; }
+        public string OID { get; set; }
     }
 }

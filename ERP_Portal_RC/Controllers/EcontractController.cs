@@ -82,7 +82,7 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
-        [HttpGet]
+        [HttpGet("")]
         public async Task<IActionResult> GetAll([FromQuery] EContractFilterRequest request)
         {
             try
@@ -335,11 +335,11 @@ namespace API.ERP_Portal_RC.Controllers
             return Ok(ApiResponse<ContractStatusResponse>.SuccessResponse(result, "Lấy thông tin thành công."));
         }
 
-        [HttpDelete("draft/{oid}")]
-        public async Task<IActionResult> DeleteDraft(string oid)
+        [HttpDelete("draft")]
+        public async Task<IActionResult> DeleteDraft([FromBody] DeleteEcontractRequest request)
         {
-            string username = User.Identity?.Name ?? "system";
-            var result = await _econtractService.DeleteDraftAsync(oid, username);
+            var username = User.FindFirst("UserCode")?.Value;
+            var result = await _econtractService.DeleteDraftAsync(request, username);
             return Ok(result);
         }
 
@@ -350,6 +350,16 @@ namespace API.ERP_Portal_RC.Controllers
                 request.RequestedBy = User.Identity?.Name ?? "system";
 
             var result = await _econtractService.UnSignAsync(request);
+            return Ok(result);
+        }
+
+        [HttpGet("job-history")]
+        public async Task<IActionResult> GetJobHistory([FromQuery] string oid)
+        {
+            if (string.IsNullOrEmpty(oid))
+                return BadRequest(ApiResponse<object>.ErrorResponse("OID không hợp lệ."));
+
+            var result = await _econtractService.GetJobHistoryAsync(oid);
             return Ok(result);
         }
     }

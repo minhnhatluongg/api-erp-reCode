@@ -2,6 +2,7 @@
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
+using ERP_Portal_RC.Domain.Enum;
 using ERP_Portal_RC.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -612,20 +613,19 @@ namespace ERP_Portal_RC.Application.Services
             return response;
         }
 
-        public async Task<ApiResponse<object>> DeleteDraftAsync(string oid, string username)
+        public async Task<ApiResponse<object>> DeleteDraftAsync(DeleteEcontractRequest request, string username)
         {
-            try
-            {
-                var result = await _eContractRepository.DeleteDraftAsync(oid, username);
-                if (result.Ok == 1)
-                    return ApiResponse<object>.SuccessResponse(null, result.Message);
+            string oid = request.OID;
 
-                return ApiResponse<object>.ErrorResponse(result.Message);
-            }
-            catch (Exception ex)
-            {
-                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi xóa nháp: " + ex.Message);
-            }
+            if (string.IsNullOrEmpty(oid))
+                return ApiResponse<object>.ErrorResponse("OID không được để trống");
+
+            var (ok, message) = await _eContractRepository.DeleteDraftAsync(oid, username);
+
+            if (ok == 1)
+                return ApiResponse<object>.SuccessResponse(null, message);
+
+            return ApiResponse<object>.ErrorResponse(message);
         }
 
         public async Task<ApiResponse<object>> UnSignAsync(UnSignRequest model)
@@ -640,6 +640,113 @@ namespace ERP_Portal_RC.Application.Services
             {
                 return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi hủy ký: " + ex.Message);
             }
+        }
+
+        public async Task<ApiResponse<EContractHistoryResponse>> GetJobHistoryAsync(string oid)
+        {
+            var raw = await _eContractRepository.GetFullHistoryDataAsync(oid);
+
+            if (raw.History == null)
+                return ApiResponse<EContractHistoryResponse>.ErrorResponse("Không tìm thấy dữ liệu.");
+            var response = new EContractHistoryResponse();
+
+            var historyList = raw.History.OrderBy(s => s.currSignDate).Select(h => new HistoryItemDTO
+            {
+                OID = h.OID,
+                CurrSignNum = h.currSignNum,
+                AppvMess = h.appvMess,
+                FullName = h.FullName,
+                CurrSignDate = h.currSignDate
+            }).ToList();
+
+            foreach (var item in historyList)
+            {
+                switch (item.CurrSignNum)
+                {
+                    case StatusSignnum.TRINH_KY: // "0"
+                        if (string.IsNullOrEmpty(item.AppvMess))
+                        {
+                            item.CurrSignNum = "Tạo mới hợp đồng";
+                            item.AppvMess = "OK";
+                        }
+                        else
+                        {
+                            item.CurrSignNum = "Hợp đồng trả về";
+                            item.AppvMess = "Lý do: " + item.AppvMess;
+                        }
+                        break;
+
+                    case StatusSignnum.CHO_KIEM_TRA: // "101"
+                        item.CurrSignNum = "Đề xuất ký";
+                        item.AppvMess = "Trình ký";
+                        break;
+
+                    case StatusSignnum.CHO_GD_DUYEN: // "201"
+                        item.CurrSignNum = "Trình ký Giám đốc";
+                        item.FullName = "Hợp đồng trình ký giám đốc";
+                        item.AppvMess = "Trình ký";
+                        break;
+
+                    case StatusSignnum.HD_DA_DUYET: // "301"
+                        item.CurrSignNum = "Hợp đồng đã ký";
+                        item.FullName = "Hợp đồng đã ký";
+                        item.AppvMess = "OK";
+                        break;
+
+                    case StatusSignnum.KH_DA_KY: // "501"
+                        item.CurrSignNum = "Hợp đồng đã được khách hàng ký";
+                        item.FullName = "Khách hàng";
+                        item.AppvMess = "OK";
+                        break;
+
+                    case StatusSignnum.HD_DONG: // "1001"
+                        item.CurrSignNum = "Đóng hợp đồng";
+                        item.AppvMess = "OK";
+                        break;
+
+                    case StatusSignnum.TRA_VE:
+                        item.CurrSignNum = "Hợp đồng bị trả về";
+                        item.AppvMess = "Lý do: " + item.AppvMess;
+                        break;
+                }
+            }
+            if (raw.Jobs != null && raw.Jobs.Any())
+            {
+                foreach (var job in raw.Jobs)
+                {
+                    // Kiểm tra điều kiện loại biên (Job đã hoàn tất thì bỏ qua)
+                    if (job.currSignNumb == (int)CurrSignNum.TRA_VE ||
+                        job.currSignNumb == (int)CurrSignNum.TRA_VE200 ||
+                        job.currSignNumb == (int)CurrSignNum.TRA_VE300)
+                        continue;
+
+                    var targetHistory = historyList.FirstOrDefault(h =>
+                        h.OID == job.OID && h.AppvMess == "Trình ký");
+
+                    if (targetHistory != null)
+                    {
+                        // Sử dụng JobFactorID và JobEntry constants để so sánh
+                        // Logic Job 004: Thay đổi thông tin (JB:008)
+                        if (job.FactorID == JobFactor.JOB_00004.ToString() && job.EntryID == JobEntry.JB008)
+                        {
+                            targetHistory.CancelDescript = !string.IsNullOrEmpty(job.DescriptChange)
+                                ? $"Lý do : {job.Reason} - {job.DescriptChange}"
+                                : $"Lý do : {job.Reason}";
+                        }
+                        // Logic Job 005: Báo xuất hóa đơn / Thanh toán
+                        else if (job.FactorID == JobFactor.JOB_00005.ToString())
+                        {
+                            if (!string.IsNullOrEmpty(job.DescriptChange))
+                            {
+                                targetHistory.CancelDescript = "Ghi chú bổ sung : " + job.DescriptChange;
+                            }
+                        }
+                    }
+                }
+            }
+
+            response.HistoryList = historyList;
+            return ApiResponse<EContractHistoryResponse>.SuccessResponse(response, "Lấy lịch sử thành công.");
         }
     }
 }

@@ -693,9 +693,9 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
         public async Task<(int Ok, string Message)> DeleteDraftAsync(string oid, string username)
         {
-            using var con = _dbConnectionFactory.GetConnection("BosOnline");
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
             var p = new DynamicParameters();
-            p.Add("@OID", oid);
+            p.Add("@OID", oid.Trim());
             p.Add("@DeletedBy", username);
             p.Add("@OK", dbType: DbType.Int32, direction: ParameterDirection.Output);
             p.Add("@Message", dbType: DbType.String, size: 4000, direction: ParameterDirection.Output);
@@ -707,7 +707,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
         public async Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId)
         {
-            using var con = _dbConnectionFactory.GetConnection("BosOnline");
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
             if (con.State == ConnectionState.Closed) await ((System.Data.Common.DbConnection)con).OpenAsync();
 
             using var trans = con.BeginTransaction();
@@ -751,6 +751,25 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 trans.Rollback();
                 throw; 
             }
+        }
+
+        public async Task<EContractHistoryRaw> GetFullHistoryDataAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection("BosOnline");
+            var raw = new EContractHistoryRaw();
+
+            using (var multi = await conn.QueryMultipleAsync("wspGet_EContracts_ByID_History", new { OID = oid }, commandType: CommandType.StoredProcedure))
+            {
+                raw.History = (await multi.ReadAsync<HistoryListEntity>()).ToList();
+            }
+
+            using (var multiJob = await conn.QueryMultipleAsync("wspGet_EContracts_ByID_DS", new { OID = oid }, commandType: CommandType.StoredProcedure))
+            {
+                multiJob.Read<dynamic>(); 
+                raw.Jobs = (await multiJob.ReadAsync<JobEntity>()).ToList();
+            }
+
+            return raw;
         }
     }
 }
