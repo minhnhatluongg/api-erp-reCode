@@ -6,9 +6,11 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using static ERP_Portal_RC.Domain.Enum.PublicEnum;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 
 
@@ -21,6 +23,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         private const string BosOnline = "BosOnline";
         private const string BosApproval = "BosApproval";
         private const string BosControlEVAT = "BosControlEVAT";
+        private const string BosDocument = "BosDocument";
+        private const string BosCataloge = "BosCataloge";
         public EContractRepository(IDbConnectionFactory dbConnectionFactory, IDSignaturesRepository dSign)
         {
             _dbConnectionFactory = dbConnectionFactory;
@@ -83,7 +87,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return await _dSign.GetDSMenuByID(loginName, grpCode);
         }
 
-        public async 
+        public async
             Task<ListEcontractViewModel> Search(string search, string crtUser, string dateStart, string dateEnd)
         {
             if (search == "CÔNG TY TNHH WIN TECH SOLUTION") search = "WIN TECH";
@@ -113,16 +117,16 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CmpnID", cmpnID);
             parameters.Add("@SaleID", saleID);
             parameters.Add("@GroupItem", group);
-            
+
             return await connection.QueryFirstOrDefaultAsync<limitGHCNKD>(
                 "GetListBillDebtReceipt", parameters, commandType: CommandType.StoredProcedure);
 
         }
         public async Task<ListEcontractViewModel> GetEContractsByHierarchyAsync(
-            string search, 
-            string emplChild, 
-            string dateStart, 
-            string dateEnd, 
+            string search,
+            string emplChild,
+            string dateStart,
+            string dateEnd,
             string currentUserCode)
         {
             using var connection = _dbConnectionFactory.GetConnection(BosOnline);
@@ -255,7 +259,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 p.Add("@Crt_User", userId);
                 p.Add("@nextSignNumb", config.NextStep);
                 p.Add("@holdSignNumb", config.NextStep == 201 ? 101 : 0);
-                p.Add("@Variant30", "1"); 
+                p.Add("@Variant30", "1");
                 // Phân nhánh Variant dựa trên nghiệp vụ Job hay EContract
                 if (config.Factor.StartsWith("JOB"))
                 {
@@ -311,21 +315,21 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                         : request.Crt_User ?? string.Empty;
 
             var p = new DynamicParameters();
-            p.Add("@OID",           request.OID ?? "");          // thường để trống, SP tự sinh
-            p.Add("@ReferenceID",   request.ReferenceID);        // Contract OID — BẮT BUỘC
-            p.Add("@FactorID",      request.FactorID);
-            p.Add("@EntryID",       request.EntryID);
-            p.Add("@Crt_User",      crtUser);
-            p.Add("@Descrip",       request.Descrip ?? "Yêu cầu từ hệ thống Portal");
-            p.Add("@FileLogo",      request.FileLogo    ?? "");
-            p.Add("@FileInvoice",   request.FileInvoice ?? "");
-            p.Add("@FileOther",     request.FileOther   ?? "");
-            p.Add("@MailAcc",       request.MailAcc     ?? "");
+            p.Add("@OID", request.OID ?? "");          // thường để trống, SP tự sinh
+            p.Add("@ReferenceID", request.ReferenceID);        // Contract OID — BẮT BUỘC
+            p.Add("@FactorID", request.FactorID);
+            p.Add("@EntryID", request.EntryID);
+            p.Add("@Crt_User", crtUser);
+            p.Add("@Descrip", request.Descrip ?? "Yêu cầu từ hệ thống Portal");
+            p.Add("@FileLogo", request.FileLogo ?? "");
+            p.Add("@FileInvoice", request.FileInvoice ?? "");
+            p.Add("@FileOther", request.FileOther ?? "");
+            p.Add("@MailAcc", request.MailAcc ?? "");
             p.Add("@ReferenceInfo", request.ReferenceInfo ?? "");
-            p.Add("@InvcSign",      request.InvcSign    ?? "");
-            p.Add("@InvcFrm",       request.InvcFrm,    dbType: DbType.Int32);
-            p.Add("@InvcEnd",       request.InvcEnd,    dbType: DbType.Int32);
-            p.Add("@invcSample",    request.invcSample  ?? "");
+            p.Add("@InvcSign", request.InvcSign ?? "");
+            p.Add("@InvcFrm", request.InvcFrm, dbType: DbType.Int32);
+            p.Add("@InvcEnd", request.InvcEnd, dbType: DbType.Int32);
+            p.Add("@invcSample", request.invcSample ?? "");
 
             try
             {
@@ -361,24 +365,24 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 string oid = "", excStatus = "";
                 if (result is IDictionary<string, object> dict)
                 {
-                    oid       = dict.TryGetValue("OID",       out var v1) ? v1?.ToString() ?? "" : "";
+                    oid = dict.TryGetValue("OID", out var v1) ? v1?.ToString() ?? "" : "";
                     excStatus = dict.TryGetValue("excStatus", out var v2) ? v2?.ToString() ?? "" : "";
                 }
                 else
                 {
-                    oid       = result.OID?.ToString()       ?? "";
+                    oid = result.OID?.ToString() ?? "";
                     excStatus = result.excStatus?.ToString() ?? "";
                 }
 
-                var parts   = excStatus.Split('|', 2, StringSplitOptions.None);
-                var flag    = parts.Length > 0 ? parts[0].Trim() : "0";
+                var parts = excStatus.Split('|', 2, StringSplitOptions.None);
+                var flag = parts.Length > 0 ? parts[0].Trim() : "0";
                 var message = parts.Length > 1 ? parts[1].Trim() : excStatus;
 
                 if (flag == "1")
                     return (true, string.IsNullOrEmpty(message) ? $"Yêu cầu tiếp nhận thành công (Job: {oid})." : message);
 
                 if (message.Contains("đã tồn tại", StringComparison.OrdinalIgnoreCase) &&
-                    message.Contains("đã duyệt",   StringComparison.OrdinalIgnoreCase))
+                    message.Contains("đã duyệt", StringComparison.OrdinalIgnoreCase))
                     return (false, $"Yêu cầu đã tồn tại và đã được duyệt (Job: {oid}).");
 
                 return (false, string.IsNullOrEmpty(message) ? "Thất bại (SP trả về flag=0)." : message);
@@ -412,28 +416,28 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             try
             {
                 var p = new DynamicParameters();
-                p.Add("@FactorID",      factorId);
-                p.Add("@OID",           jobOid);
-                p.Add("@ODate",         DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-                p.Add("@CmpnID",        "26");
-                p.Add("@Crt_User",      userId);
-                p.Add("@DataTbl",       "EContractJobs");
-                p.Add("@SignTble",       "zsgn_EContractJobs");
-                p.Add("@SignChck",       0);
-                p.Add("@holdSignNumb",   fromSignNumb);
-                p.Add("@nextSignNumb",   toSignNumb);
+                p.Add("@FactorID", factorId);
+                p.Add("@OID", jobOid);
+                p.Add("@ODate", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                p.Add("@CmpnID", "26");
+                p.Add("@Crt_User", userId);
+                p.Add("@DataTbl", "EContractJobs");
+                p.Add("@SignTble", "zsgn_EContractJobs");
+                p.Add("@SignChck", 0);
+                p.Add("@holdSignNumb", fromSignNumb);
+                p.Add("@nextSignNumb", toSignNumb);
                 p.Add("@AppvRouteGroup", "");
                 p.Add("@AppvRouteGrpTp", 1);
-                p.Add("@AppvMess",       !string.IsNullOrEmpty(appvMess) ? appvMess : "Phát hành từ hệ thống Portal");
+                p.Add("@AppvMess", !string.IsNullOrEmpty(appvMess) ? appvMess : "Phát hành từ hệ thống Portal");
                 // Variant01-25: để rỗng
                 foreach (var i in Enumerable.Range(1, 25))
                     p.Add($"@Variant{i:D2}", "");
-                p.Add("@Variant26",      contractOid); 
-                p.Add("@Variant27",      "");
-                p.Add("@Variant28",      "");
-                p.Add("@Variant29",      "");
-                p.Add("@Variant30",      "1");
-                p.Add("@EntryID",        entryId);
+                p.Add("@Variant26", contractOid);
+                p.Add("@Variant27", "");
+                p.Add("@Variant28", "");
+                p.Add("@Variant29", "");
+                p.Add("@Variant30", "1");
+                p.Add("@EntryID", entryId);
 
                 var result = await connApproval.QuerySingleAsync<dynamic>(
                     "zsgn_EContractJobs_NOR", p,
@@ -452,7 +456,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 throw new Exception($"Lỗi nâng trạng thái Job: {ex.Message}");
             }
         }
-        public async  Task<Template> GetTemplateByCodeAsync(string factorId)
+        public async Task<Template> GetTemplateByCodeAsync(string factorId)
         {
             using var connection = _dbConnectionFactory.GetConnection(BosControlEVAT);
             var parameters = new { cmpnID = "26", FactorID = factorId };
@@ -506,7 +510,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     d.VAT_Rate,                       // 9. VAT_Rate
                     vatAmnt,                          // 10. VAT_Amnt
                     amnt + vatAmnt,                   // 11. Sum_Amnt
-                    safeName,                         // 12. Descrip (Dùng ItemName làm nội dung để không bị NULL)
+                    safeName,                         // 12. Descrip 
                     d.InvcSign ?? "",                 // 13. InvcSign
                     d.InvcFrm,                        // 14. InvcFrm
                     d.InvcEnd,                        // 15. InvcEnd
@@ -556,7 +560,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CmpID_Sign", master.CmpID_Sign ?? "");
             parameters.Add("@CmpName_Sign", master.CmpName_Sign ?? "");
             parameters.Add("@isUsingAcc", 0);
-            parameters.Add("@SignNumb",-1);
+            parameters.Add("@SignNumb", -1);
 
             // Thông tin Tiền tệ & Hệ thống
             parameters.Add("@PrdcAmnt", master.PrdcAmnt);
@@ -608,9 +612,9 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@nextSignNumb", 0);
             parameters.Add("@Variant22", string.Empty);
             parameters.Add("@Variant26", string.Empty);
-            parameters.Add("@Variant27", master.CusTax ?? string.Empty); 
-            parameters.Add("@Variant28", master.CmpnTax ?? string.Empty); 
-            parameters.Add("@Variant29", master.SampleID ?? "0010");      
+            parameters.Add("@Variant27", master.CusTax ?? string.Empty);
+            parameters.Add("@Variant28", master.CmpnTax ?? string.Empty);
+            parameters.Add("@Variant29", master.SampleID ?? "0010");
             parameters.Add("@EntryID", master.EntryID ?? "EC:001");
             parameters.Add("@AppvMess", ".");
 
@@ -749,7 +753,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             catch (Exception)
             {
                 trans.Rollback();
-                throw; 
+                throw;
             }
         }
 
@@ -757,19 +761,643 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         {
             using var conn = _dbConnectionFactory.GetConnection("BosOnline");
             var raw = new EContractHistoryRaw();
-
-            using (var multi = await conn.QueryMultipleAsync("wspGet_EContracts_ByID_History", new { OID = oid }, commandType: CommandType.StoredProcedure))
+            string cleanOid = oid.Replace("%2F", "/").Replace("%2f", "/");
+            cleanOid = System.Net.WebUtility.UrlDecode(cleanOid);
+            using (var multi = await conn.QueryMultipleAsync("wspGet_EContracts_ByID_History", new { OID = cleanOid }, commandType: CommandType.StoredProcedure))
             {
                 raw.History = (await multi.ReadAsync<HistoryListEntity>()).ToList();
             }
 
-            using (var multiJob = await conn.QueryMultipleAsync("wspGet_EContracts_ByID_DS", new { OID = oid }, commandType: CommandType.StoredProcedure))
+            using (var multiJob = await conn.QueryMultipleAsync("wspGet_EContracts_ByID_DS", new { OID = cleanOid }, commandType: CommandType.StoredProcedure))
             {
-                multiJob.Read<dynamic>(); 
+                multiJob.Read<dynamic>();
                 raw.Jobs = (await multiJob.ReadAsync<JobEntity>()).ToList();
             }
 
             return raw;
+        }
+
+        public async Task<List<JobEntity>> GetJobKTbyOID(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection("BosOnline");
+            try
+            {
+                var result = await conn.QueryAsync<JobEntity>(
+                    "GetJobKTbyOID",
+                    new { oid },
+                    commandType: CommandType.StoredProcedure
+                );
+                return result.ToList();
+            }
+            catch (Exception ex)
+            {
+                return new List<JobEntity>();
+            }
+        }
+
+        public async Task<List<EContractDetails>> GetEContractDetailsNewAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            try
+            {
+                string query = "getEContractDetailsNew";
+                DynamicParameters para = new DynamicParameters();
+                para.Add("@oid", oid);
+
+                var result = await conn.QueryAsync<EContractDetails>(
+                    query,
+                    param: para,
+                    commandType: CommandType.StoredProcedure
+                );
+
+                return result.ToList();
+            }
+            catch (Exception ex)
+            {
+                return new List<EContractDetails>();
+            }
+        }
+
+        public async Task<EContractHistoryRaw2> GetEContractRawDataAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            var raw = new EContractHistoryRaw2();
+            try
+            {
+                using (var multi = await conn.QueryMultipleAsync(
+                    "wspGet_EContracts_ByID",
+                    new { OID = oid },
+                    commandType: CommandType.StoredProcedure))
+                {
+                    // 1. Table 1: Thông tin Master của hợp đồng (EContracts_Rslt)
+                    raw.EContract = await multi.ReadFirstOrDefaultAsync<EContractMaster>();
+
+                    // 2. Table 2: Danh sách Jobs liên quan (EContractJobs)
+                    raw.Jobs = (await multi.ReadAsync<JobEntity>()).ToList();
+
+                    // 3. Table 3: Danh sách các bước ký/duyệt (zsgn_EContractJobs)
+                    // Trong code cũ bạn gọi đây là JobPost
+                    raw.JobPosts = (await multi.ReadAsync<JobPost>()).ToList();
+
+                    // 4. Table 4: Danh sách File đính kèm (DocAttachfile)
+                    raw.ListFiles = (await multi.ReadAsync<ListFile>()).ToList();
+
+                    // 5. Table 5: Chi tiết sản phẩm/dịch vụ (EContractDetails)
+                    raw.EContractDetails = (await multi.ReadAsync<EContractDetails>()).ToList();
+
+                    // 6. Table 6: Thông tin đơn vị chủ quản (bosCompanyInfo)
+                    raw.Vendor = await multi.ReadFirstOrDefaultAsync<VendorEntity>();
+
+                    // 7. Table 7: Thông tin mẫu hợp đồng (EVat_Samples)
+                    raw.TemplateEcontract = await multi.ReadFirstOrDefaultAsync<templateEcontract>();
+
+                    // 8. Table 8: Thông tin công khai hóa đơn (ECtr_PublicInfo)
+                    raw.ECtr_PublicInfo = await multi.ReadFirstOrDefaultAsync<ECtr_PublicInfo>();
+
+                    // 9. Table 9: Thông tin Email người dùng (HmrEmplProfile)
+                    raw.EmailUser = await multi.ReadFirstOrDefaultAsync<EmailUser>();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Lỗi khi lấy dữ liệu Raw cho OID {oid}: {ex.Message}");
+            }
+            return raw;
+        }
+
+        public async Task DeleteJob01Async(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            conn.Open();
+            using var trans = conn.BeginTransaction();
+            try
+            {
+                const string sql = @"DELETE FROM EContractJobs 
+                                 WHERE ReferenceID = @OID 
+                                   AND FactorID = 'JOB_00001' 
+                                   AND EntryID = 'JB:001'";
+                await conn.ExecuteAsync(sql, new { OID = oid }, trans);
+                trans.Commit();
+
+            }
+            catch
+            {
+                trans.Rollback();
+                throw;
+            }
+        }
+
+        public async Task<JobEntity> InsertJobAsync(JobEntity job)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            conn.Open();
+            using var trans = conn.BeginTransaction();
+            try
+            {
+                if (!string.IsNullOrEmpty(job.OID))
+                {
+                    await UploadFileAsync(job);
+                }
+                else
+                {
+                    var p = new DynamicParameters();
+                    p.Add("@ReferenceID", job.ReferenceID);
+                    p.Add("@FactorID", job.FactorID);
+                    p.Add("@EntryID", job.EntryID);
+                    p.Add("@Descrip", job.Descrip ?? string.Empty);
+                    p.Add("@FileLogo", job.FileLogo ?? string.Empty);
+                    p.Add("@FileInvoice", job.FileInvoice ?? string.Empty);
+                    p.Add("@FileOther", job.FileOther ?? string.Empty);
+                    p.Add("@Crt_User", job.Crt_User ?? string.Empty);
+                    p.Add("@InvcSign", job.InvcSign ?? string.Empty);
+                    p.Add("@InvcFrm", job.InvcFrm ?? 0);
+                    p.Add("@InvcEnd", job.InvcEnd ?? 0);
+                    p.Add("@invcSample", job.invcSample ?? string.Empty);
+                    p.Add("@CmpnID", job.cmpnID ?? string.Empty);
+                    p.Add("@OID", "", dbType: DbType.String, direction: ParameterDirection.Output, size: 50);
+                    p.Add("@MailAcc", "ketoanhoadondientu@win-tech.vn");
+                    p.Add("@ReferenceInfo", job.ReferenceInfo ?? string.Empty);
+                    p.Add("@isAuto", job.isAuto_InvcNumb);
+
+                    await conn.ExecuteAsync("wspInsert_EContractJobs_IsAuto", p, trans, commandType: CommandType.StoredProcedure);
+                }
+                trans.Commit();
+            }
+            catch
+            {
+                trans.Rollback();
+                throw;
+            }
+            var result = await conn.QueryMultipleAsync("wspList_Job", new { OID = job.ReferenceID }, commandType: CommandType.StoredProcedure);
+            return result.Read<JobEntity>().Last();
+        }
+
+        public async Task UploadFileAsync(JobEntity job)
+        {
+            var files = new List<string> {
+            job.FileName0, job.FileName1, job.FileName2, job.FileName3, job.FileName4}.Where(f => !string.IsNullOrEmpty(f)).ToList();
+
+            if (!files.Any()) return;
+
+            using var conn = _dbConnectionFactory.GetConnection(BosDocument);
+            conn.Open();
+
+            const string sQuery = @" INSERT INTO INSERT INTO [BosDocument].[dbo].[DocAttachfile]
+                                        (AttachType, 
+                                        AttachNote, 
+                                        AttachDate, 
+                                        AttachFile, 
+                                        ConvertFile, 
+                                        OID, 
+                                        FactorID, 
+                                        EntryID, 
+                                        Crt_User, DocSource, DocSourceDateField, DocSourceDateField_Value, LinkFonder)
+                                            VALUES (
+                                            @AttachType, 
+                                            @AttachNote, 
+                                            GETDATE(), 
+                                            @AttachFile, 
+                                            @ConvertFile, 
+                                            @OID, 
+                                            @FactorID, 
+                                            @EntryID, 
+                                            @Crt_User, 
+                                            @DocSource, 
+                                            @DocSourceDateField, 
+                                            GETDATE(), 
+                                            @LinkFonder)";
+            var oidLink = job.ReferenceID?.Replace("/", "").Replace(":", "") ?? "";
+
+            foreach (var fileName in files)
+            {
+                using var trans = conn.BeginTransaction();
+                try
+                {
+                    var parameters = new DynamicParameters();
+                    parameters.Add("@AttachType", job.AttachType ?? ".");
+                    parameters.Add("@AttachNote", job.AttachNote ?? ".");
+                    parameters.Add("@AttachDate", DateTime.Now.ToString());
+                    parameters.Add("@AttachFile", fileName);
+                    parameters.Add("@ConvertFile", fileName ?? string.Empty);
+                    parameters.Add("@OID", job.OID);
+                    parameters.Add("@FactorID", job.FactorIDAtt);
+                    parameters.Add("@EntryID", job.EntryID);
+                    parameters.Add("@Crt_User", job.Crt_User);
+                    parameters.Add("@DocSource", "");
+                    parameters.Add("@DocSourceDateField", job.FileUrl);
+                    parameters.Add("@LinkFonder", oidLink);
+
+                    await conn.ExecuteAsync(sQuery, parameters, trans);
+                    trans.Commit();
+                }
+                catch
+                {
+                    trans.Rollback();
+                    throw;
+                }
+            }
+        }
+
+        public async Task<List<DepartmentsEntity>> GetDepartmentsByOidAsync(string did)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosCataloge);
+            conn.Open();
+            var result = await conn.QueryAsync<DepartmentsEntity>(
+                "GetDeparment",
+                new { DID = did },
+                commandType: CommandType.StoredProcedure);
+            return result.ToList();
+
+        }
+
+        public async Task<List<EContractDetails>> VerifyJobAsync(string cusTax, string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            conn.Open();
+
+            var result = await conn.QueryAsync<EContractDetails>(
+                "wps_VerifyJob",
+                new { taxNumber = cusTax, OID = oid },
+                commandType: CommandType.StoredProcedure);
+            return result.ToList();
+        }
+        public async Task UpdateJobSaveAsync(JobEntity job, List<JobPackEntity> jobPacks, int sumInvc, int? countChange, string info, string descript)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            conn.Open();
+            using var transaction = conn.BeginTransaction();
+
+            try
+            {
+                var mainParams = new DynamicParameters();
+                mainParams.Add("@ReferenceID", job.ReferenceID);
+                mainParams.Add("@OID", job.OID);
+                mainParams.Add("@FactorID", job.FactorID);
+                mainParams.Add("@EntryID", job.EntryID);
+                mainParams.Add("@Descrip", descript);
+                mainParams.Add("@FileLogo", job.FileLogo ?? string.Empty);
+                mainParams.Add("@FileInvoice", job.FileInvoice ?? string.Empty);
+
+                mainParams.Add("@FileOther", job.FileOther ?? string.Empty);
+                mainParams.Add("@FileName0", job.FileName0 ?? string.Empty);
+                mainParams.Add("@FileName1", job.FileName1 ?? string.Empty);
+                mainParams.Add("@FileName2", job.FileName2 ?? string.Empty);
+                mainParams.Add("@FileName3", job.FileName3 ?? string.Empty);
+                mainParams.Add("@FileName4", job.FileName4 ?? string.Empty);
+                mainParams.Add("@FileName5", job.FileName5 ?? string.Empty);
+                mainParams.Add("@FileName6", job.FileName6 ?? string.Empty);
+                mainParams.Add("@FileName7", job.FileName7 ?? string.Empty);
+                mainParams.Add("@FileName8", job.FileName8 ?? string.Empty);
+                mainParams.Add("@FileName9", job.FileName9 ?? string.Empty);
+
+                mainParams.Add("@Crt_User", job.Crt_User);
+                mainParams.Add("@InvcSign", job.InvcSign ?? string.Empty);
+                mainParams.Add("@InvcFrm", job.InvcFrm ?? 0);
+                mainParams.Add("@InvcEnd", sumInvc); 
+                mainParams.Add("@invcSample", job.invcSample ?? string.Empty);
+                mainParams.Add("@PackID", job.PackID ?? string.Empty);
+                mainParams.Add("@ReferenceInfo", info); 
+                mainParams.Add("@CountChange", countChange); 
+                mainParams.Add("@Reason", job.ChangeOption ?? string.Empty);
+                mainParams.Add("@DescriptChange", job.DescriptChange ?? string.Empty);
+                mainParams.Add("@TemplateID", job.TemplateID ?? string.Empty);
+                mainParams.Add("@Issave", true);
+                mainParams.Add("@OperDept", job.OperDept ?? string.Empty);
+                mainParams.Add("@isDesignInvoices", job.isDesignInvoices);
+
+                await conn.ExecuteAsync("wspUpdate_EContractJobs_Save", mainParams, transaction, commandType: CommandType.StoredProcedure);
+
+                // 2. Cập nhật chi tiết từng gói sản phẩm trong Job (wpsIns_EContractJobDetail)
+                foreach (var pack in jobPacks)
+                {
+                    var packParams = new DynamicParameters();
+                    packParams.Add("@OID", job.OID);
+                    packParams.Add("@ItemID", pack.ItemID);
+                    packParams.Add("@Descrip", pack.Descrip ?? string.Empty); 
+                    packParams.Add("@InvcSign", pack.InvcSign);
+                    packParams.Add("@InvcFrm", pack.InvcFrm);
+                    packParams.Add("@InvcEnd", pack.InvcEnd);
+                    packParams.Add("@invcSample", pack.invcSample);
+                    packParams.Add("@ItemNo", pack.ItemNo);
+                    packParams.Add("@PublDate", pack.PublDate); 
+                    packParams.Add("@Use_Date", pack.Use_Date);
+
+                    await conn.ExecuteAsync("wpsIns_EContractJobDetail", packParams, transaction, commandType: CommandType.StoredProcedure);
+                }
+                await conn.ExecuteAsync("wspUpdate_EContractJobs_ByPackID", new { OID = job.OID }, transaction, commandType: CommandType.StoredProcedure);
+                transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+        public async Task<Limit> limitcn(string cmpnId, string saleId, string GroupItem)
+        {
+            using var connection = _dbConnectionFactory.GetConnection(BosOnline);
+            var parameters = new DynamicParameters();
+            parameters.Add("@CmpnID", cmpnId);
+            parameters.Add("@SaleID", saleId);
+            parameters.Add("@GroupItem", GroupItem);
+
+            return await connection.QueryFirstOrDefaultAsync<Limit>(
+                "GetDebtLtdSales",
+                parameters,
+                commandType: CommandType.StoredProcedure
+    );
+        }
+
+        public async Task<List<ListFile>> GetListFilesAsync(string oid)
+        {
+            using var connection = _dbConnectionFactory.GetConnection(BosOnline);
+            var result = await connection.QueryAsync<ListFile>(
+                "Get_ListFile",
+                new { OID = oid },
+                commandType: CommandType.StoredProcedure);
+            return result.ToList();
+        }
+
+        public async Task<Right_EContracts?> GetRightEContractsAsync(int currSign, string grpList)
+        {
+            using var connection = _dbConnectionFactory.GetConnection(BosOnline);
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@CurrSign", currSign);
+            parameters.Add("@Grp_Code", grpList);
+
+            return await connection.QueryFirstOrDefaultAsync<Right_EContracts>(
+                "wspRight_EContracts",
+                parameters,
+                commandType: CommandType.StoredProcedure);
+        }
+
+        public async Task<byte[]?> GetInvcContentXmlAsync(string oid)
+        {
+            using var connection = _dbConnectionFactory.GetConnection(BosOnline);
+            string sql = "SELECT InvcContent FROM BosControlEVAT.dbo.ECtr_PublicInfo WHERE InvcCode = @OID";
+            return await connection.ExecuteScalarAsync<byte[]>(sql, new { OID = oid });
+        }
+
+        public async Task<EmailUserRawData?> GetEmailUserDeptAsync(string oid)
+        {
+            using var connection = _dbConnectionFactory.GetConnection(BosOnline);
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@OID", oid);
+
+            var data = new EmailUserRawData();
+
+            try
+            {
+                using (var multi = await connection.QueryMultipleAsync(
+                    "Get_EmailByJob",
+                    parameters,
+                    commandType: CommandType.StoredProcedure))
+                {
+                    // Table 1: select * from #job
+                    data.Jobs = (await multi.ReadAsync<JobEntity>()).ToList();
+
+                    // Table 2: select email.* from tbl_EmailUser 
+                    data.EmailUserDept = await multi.ReadFirstOrDefaultAsync<EmailUserDept>();
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Lỗi khi lấy thông tin Email theo Job OID {oid}: {ex.Message}");
+            }
+            return data;
+        }
+
+        public async Task<bool> ApproveContractJobAsync(ZsgnEContractJob entity, int holdSignNumb, int nextSignNumb)
+        {
+            using var connApproval = _dbConnectionFactory.GetConnection(BosApproval);
+
+            if (connApproval.State == ConnectionState.Closed) connApproval.Open();
+            using var trans = connApproval.BeginTransaction();
+
+            try
+            {
+                var p = new DynamicParameters();
+                p.Add("@FactorID", entity.FactorID);
+                p.Add("@OID", entity.OID);
+                p.Add("@ODate", entity.ODate.ToString("yyyy-MM-dd HH:mm:ss"));
+                p.Add("@CmpnID", entity.CmpnID ?? "26");
+                p.Add("@Crt_User", entity.Crt_User);
+                p.Add("@DataTbl", entity.DataTbl ?? "EContractJobs");
+                p.Add("@SignTble", "zsgn_EContractJobs");
+                p.Add("@SignChck", 0);
+                p.Add("@holdSignNumb", holdSignNumb);
+                p.Add("@nextSignNumb", nextSignNumb);
+                p.Add("@AppvRouteGroup", "");
+                p.Add("@AppvRouteGrpTp", 1);
+                p.Add("@AppvMess", entity.AppvMess ?? "Duyệt từ hệ thống Portal");
+
+                for (int i = 1; i <= 25; i++)
+                {
+                    p.Add($"@Variant{i:D2}", "");
+                }
+
+                p.Add("@Variant26", entity.ReferenceID ?? "");
+                p.Add("@Variant27", "");
+                p.Add("@Variant28", "");
+                p.Add("@Variant29", "");
+                p.Add("@Variant30", entity.Variant30 ?? "1");
+                p.Add("@EntryID", entity.EntryID);
+
+                var result = await connApproval.QuerySingleAsync<dynamic>(
+                    "zsgn_EContractJobs_NOR",
+                    p,
+                    transaction: trans,
+                    commandType: CommandType.StoredProcedure);
+
+                trans.Commit();
+                return (int)result.ExecValue == 1;
+            }
+            catch (Exception ex)
+            {
+                trans.Rollback();
+                throw new Exception($"Lỗi thực thi duyệt Job OID {entity.OID}: {ex.Message}");
+            }
+        }
+        public async Task UpdateJobChangeAsync(JobEntity job, int? countChange, string info)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            if (conn.State == ConnectionState.Closed) conn.Open();
+
+            using var trans = conn.BeginTransaction();
+            try
+            {
+                // 1. Cập nhật thông tin Job Master kèm thông tin người thực hiện
+                var detailParams = new DynamicParameters();
+                detailParams.Add("@ReferenceID", job.ReferenceID);
+                detailParams.Add("@FactorID", job.FactorID);
+                detailParams.Add("@EntryID", "JB:005"); 
+                detailParams.Add("@Descrip", job.Descrip ?? string.Empty);
+                detailParams.Add("@FileLogo", job.FileLogo ?? string.Empty);
+                detailParams.Add("@FileInvoice", job.FileInvoice ?? string.Empty);
+                detailParams.Add("@FileOther", job.FileOther ?? string.Empty);
+                detailParams.Add("@Crt_User", job.Crt_User ?? string.Empty);
+                detailParams.Add("@InvcSign", job.InvcSign ?? string.Empty);
+                detailParams.Add("@InvcFrm", job.InvcFrm ?? 0);
+                detailParams.Add("@InvcEnd", job.InvcEnd ?? 0);
+                detailParams.Add("@invcSample", job.invcSample ?? string.Empty);
+                detailParams.Add("@PackID", job.PackID ?? string.Empty);
+                detailParams.Add("@ReferenceInfo", info ?? string.Empty);
+                detailParams.Add("@OID", job.OID);
+                detailParams.Add("@CountChange", countChange);
+                detailParams.Add("@Reason", job.ChangeOption ?? string.Empty);
+                detailParams.Add("@DescriptChange", job.DescriptChange ?? string.Empty);
+                detailParams.Add("@exeEmplName", job.EmplName ?? string.Empty); 
+                detailParams.Add("@exeEmplID", job.EmplID ?? string.Empty);
+                detailParams.Add("@ReferenceDate", DateTime.Now);
+                detailParams.Add("@OperDept", job.OperDept);
+
+                await conn.ExecuteAsync("wspUpdate_EContractJobs_exeEmplName_v1",
+                    detailParams, transaction: trans, commandType: CommandType.StoredProcedure);
+
+                // 2. Chèn/Cập nhật chi tiết Job (JobDetail)
+                var detailParams2 = new DynamicParameters();
+                detailParams2.Add("@OID", job.OID);
+                detailParams2.Add("@ItemID", job.PackID);
+                detailParams2.Add("@Descrip", job.Descrip ?? string.Empty);
+                detailParams2.Add("@InvcSign", job.InvcSign);
+                detailParams2.Add("@InvcFrm", job.InvcFrm);
+                detailParams2.Add("@InvcEnd", job.InvcEnd);
+                detailParams2.Add("@invcSample", job.invcSample);
+                detailParams2.Add("@ItemNo", job.ItemNo);
+                detailParams2.Add("@PublDate", job.PublDate);
+                detailParams2.Add("@Use_Date", job.Use_Date);
+
+                await conn.ExecuteAsync("wpsIns_EContractJobDetail",
+                    detailParams2, transaction: trans, commandType: CommandType.StoredProcedure);
+
+                // 3. Cập nhật thông tin chi tiết hợp đồng chính (EContractsDetails)
+                var detailParamsDetail = new DynamicParameters();
+                detailParamsDetail.Add("@OID", job.ReferenceID);
+                detailParamsDetail.Add("@ItemID", job.PackID);
+                detailParamsDetail.Add("@InvcSign", job.InvcSign);
+                detailParamsDetail.Add("@InvcFrm", job.InvcFrm);
+                detailParamsDetail.Add("@InvcEnd", job.InvcEnd);
+                detailParamsDetail.Add("@invcSample", job.invcSample);
+
+                await conn.ExecuteAsync("wspUpdate_EContractsDetails_V2",
+                    detailParamsDetail, transaction: trans, commandType: CommandType.StoredProcedure);
+
+                // 4. Cập nhật lại PackID cho Job
+                await conn.ExecuteAsync("wspUpdate_EContractJobs_ByPackID",
+                    new { OID = job.OID }, transaction: trans, commandType: CommandType.StoredProcedure);
+
+                // 5. Thực hiện trình ký tự động (zsgn_EContractJobs_NOR)
+                var approveParams = new DynamicParameters();
+                approveParams.Add("@FactorID", "JOB_00001");
+                approveParams.Add("@OID", job.OID);
+                approveParams.Add("@ODate", DateTime.Now.ToString("yyyy/MM/dd"));
+                approveParams.Add("@CmpnID", job.CmpnID ?? "26");
+                approveParams.Add("@Crt_User", job.Crt_User);
+                approveParams.Add("@DataTbl", string.Empty);
+                approveParams.Add("@SignTble", "zsgn_EContractJobs");
+                approveParams.Add("@SignChck", string.Empty);
+                approveParams.Add("@holdSignNumb", 0); 
+                approveParams.Add("@nextSignNumb", 101); 
+                approveParams.Add("@Variant22", string.Empty);
+                approveParams.Add("@Variant30", string.Empty);
+                approveParams.Add("@EntryID", "JB:005");
+                approveParams.Add("@AppvMess", "Yêu cầu chỉnh sửa");
+                approveParams.Add("@AppvRouteGrpTp", "1");
+
+                await conn.ExecuteAsync("BosApproval.dbo.zsgn_EContractJobs_NOR",
+                    approveParams, transaction: trans, commandType: CommandType.StoredProcedure);
+                trans.Commit();
+            }
+            catch (Exception ex)
+            {
+                trans.Rollback();
+                throw new Exception($"Lỗi khi cập nhật Job Change OID {job.OID}: {ex.Message}");
+            }
+        }
+        public async Task<string> GetByOIDJobChangeAsync(string OID)
+        {
+            var rawData = await GetEContractRawDataAsync(OID);
+
+            if(rawData == null)
+            {
+                throw new Exception($"Không tìm thấy dữ liệu hợp đồng cho OID {OID}");
+            }
+            var expandedDetails = new List<EContractDetails>();
+            var targetDetails = rawData.EContractDetails
+                .Where(s => s.UsIN == "JOB_00001")
+                .ToList();
+            foreach (var detail in targetDetails)
+            {
+                detail.InvcEnd = (int)detail.ItemPerBox;
+                int repeatCount = (int)(detail.ItemQtty > 1 ? detail.ItemQtty : 1);
+                for (int i = 0; i < repeatCount; i++)
+                {
+                    expandedDetails.Add(detail);
+                }
+            }
+            var jobRequest = new JobEntity
+            {
+                ReferenceID = OID,
+                FactorID = "JOB_00001", // JobFactor.JOB_00001
+                EntryID = "JB:005",    // JobEntry.JB:005
+                Crt_User = rawData.EContract.Crt_User,
+                cmpnID = rawData.EContract.CmpnID
+            };
+            var resultJob = await InsertJobAsync(jobRequest);
+            return resultJob.OID;
+        }
+
+        public async Task<JobEntity> InsertJobChangeYCAsync(JobEntity job)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            if (conn.State == ConnectionState.Closed) conn.Open();
+
+            using var trans = conn.BeginTransaction();
+            try
+            {
+                
+                if (!string.IsNullOrEmpty(job.OID))
+                {
+                    await UploadFileAsync(job); 
+                }
+                else
+                {
+                    var detailParams = new DynamicParameters();
+                    detailParams.Add("@ReferenceID", job.ReferenceID);
+                    detailParams.Add("@FactorID", job.FactorID);
+                    detailParams.Add("@EntryID", job.EntryID);
+                    detailParams.Add("@Descrip", job.Descrip ?? string.Empty);
+                    detailParams.Add("@FileLogo", job.FileLogo ?? string.Empty);
+                    detailParams.Add("@FileInvoice", job.FileInvoice ?? string.Empty);
+                    detailParams.Add("@FileOther", job.FileOther ?? string.Empty);
+                    detailParams.Add("@Crt_User", job.Crt_User ?? string.Empty);
+                    detailParams.Add("@InvcSign", job.InvcSign ?? string.Empty);
+                    detailParams.Add("@InvcFrm", job.InvcFrm ?? 0);
+                    detailParams.Add("@InvcEnd", job.InvcEnd ?? 0);
+                    detailParams.Add("@invcSample", job.invcSample ?? string.Empty);
+                    detailParams.Add("@CmpnID", job.cmpnID ?? string.Empty);
+                    detailParams.Add("@OID", ""); 
+
+                    await conn.ExecuteAsync("wspInsert_EContractJobs",
+                        detailParams, transaction: trans, commandType: CommandType.StoredProcedure);
+
+                    trans.Commit(); 
+                }
+
+                var resultList = await conn.QueryAsync<JobEntity>(
+                    "wspList_Job",
+                    new { OID = job.ReferenceID },
+                    commandType: CommandType.StoredProcedure);
+
+                return resultList.LastOrDefault(); 
+            }
+            catch (Exception ex)
+            {
+                if (trans.Connection != null) trans.Rollback();
+                throw new Exception($"Lỗi khi khởi tạo Job Change YC: {ex.Message}");
+            }
         }
     }
 }

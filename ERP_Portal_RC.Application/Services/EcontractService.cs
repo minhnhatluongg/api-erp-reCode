@@ -4,11 +4,13 @@ using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Enum;
 using ERP_Portal_RC.Domain.Interfaces;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.IO.Compression;
 using System.Linq;
 using System.Security;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -22,13 +24,14 @@ namespace ERP_Portal_RC.Application.Services
     {
         private readonly IEContractRepository _eContractRepository;
         private readonly IMailService _mailService;
+        private readonly IFileStorageService _fileStorageService;
 
-        public EcontractService(IEContractRepository econtractRepo, IMailService mailService)
+        public EcontractService(IEContractRepository econtractRepo, IMailService mailService, IFileStorageService fileStorageService)
         {
             _eContractRepository = econtractRepo;
             _mailService = mailService;
+            _fileStorageService = fileStorageService;
         }
-
         public async Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string groupList, string userCode)
         {
 
@@ -648,6 +651,7 @@ namespace ERP_Portal_RC.Application.Services
 
             if (raw.History == null)
                 return ApiResponse<EContractHistoryResponse>.ErrorResponse("Không tìm thấy dữ liệu.");
+
             var response = new EContractHistoryResponse();
 
             var historyList = raw.History.OrderBy(s => s.currSignDate).Select(h => new HistoryItemDTO
@@ -656,14 +660,15 @@ namespace ERP_Portal_RC.Application.Services
                 CurrSignNum = h.currSignNum,
                 AppvMess = h.appvMess,
                 FullName = h.FullName,
-                CurrSignDate = h.currSignDate
+                CurrSignDate = h.currSignDate,
+                CancelDescript = "" 
             }).ToList();
 
             foreach (var item in historyList)
             {
                 switch (item.CurrSignNum)
                 {
-                    case StatusSignnum.TRINH_KY: // "0"
+                    case StatusSignnum.TRINH_KY:
                         if (string.IsNullOrEmpty(item.AppvMess))
                         {
                             item.CurrSignNum = "Tạo mới hợp đồng";
@@ -675,80 +680,570 @@ namespace ERP_Portal_RC.Application.Services
                             item.AppvMess = "Lý do: " + item.AppvMess;
                         }
                         break;
-
-                    case StatusSignnum.CHO_KIEM_TRA: // "101"
+                    case StatusSignnum.CHO_KIEM_TRA:
                         item.CurrSignNum = "Đề xuất ký";
                         item.AppvMess = "Trình ký";
                         break;
-
-                    case StatusSignnum.CHO_GD_DUYEN: // "201"
+                    case StatusSignnum.CHO_GD_DUYEN:
                         item.CurrSignNum = "Trình ký Giám đốc";
                         item.FullName = "Hợp đồng trình ký giám đốc";
                         item.AppvMess = "Trình ký";
                         break;
-
-                    case StatusSignnum.HD_DA_DUYET: // "301"
+                    case StatusSignnum.HD_DA_DUYET:
                         item.CurrSignNum = "Hợp đồng đã ký";
                         item.FullName = "Hợp đồng đã ký";
                         item.AppvMess = "OK";
                         break;
-
-                    case StatusSignnum.KH_DA_KY: // "501"
+                    case StatusSignnum.KH_DA_KY:
                         item.CurrSignNum = "Hợp đồng đã được khách hàng ký";
                         item.FullName = "Khách hàng";
                         item.AppvMess = "OK";
                         break;
-
-                    case StatusSignnum.HD_DONG: // "1001"
+                    case StatusSignnum.HD_DONG:
                         item.CurrSignNum = "Đóng hợp đồng";
                         item.AppvMess = "OK";
                         break;
-
                     case StatusSignnum.TRA_VE:
                         item.CurrSignNum = "Hợp đồng bị trả về";
                         item.AppvMess = "Lý do: " + item.AppvMess;
                         break;
                 }
             }
+
             if (raw.Jobs != null && raw.Jobs.Any())
             {
+                response.JobList = raw.Jobs.Where(j =>
+                    j.currSignNumb != (int)CurrSignNum.TRA_VE &&
+                    j.currSignNumb != (int)CurrSignNum.TRA_VE200 &&
+                    j.currSignNumb != (int)CurrSignNum.TRA_VE300
+                ).ToList();
+
                 foreach (var job in raw.Jobs)
                 {
-                    // Kiểm tra điều kiện loại biên (Job đã hoàn tất thì bỏ qua)
                     if (job.currSignNumb == (int)CurrSignNum.TRA_VE ||
                         job.currSignNumb == (int)CurrSignNum.TRA_VE200 ||
                         job.currSignNumb == (int)CurrSignNum.TRA_VE300)
                         continue;
 
-                    var targetHistory = historyList.FirstOrDefault(h =>
-                        h.OID == job.OID && h.AppvMess == "Trình ký");
+                    var targetHistory = historyList.FirstOrDefault(h => h.OID == job.OID);
 
                     if (targetHistory != null)
                     {
-                        // Sử dụng JobFactorID và JobEntry constants để so sánh
-                        // Logic Job 004: Thay đổi thông tin (JB:008)
+                        string jobNote = "";
                         if (job.FactorID == JobFactor.JOB_00004.ToString() && job.EntryID == JobEntry.JB008)
                         {
-                            targetHistory.CancelDescript = !string.IsNullOrEmpty(job.DescriptChange)
+                            jobNote = !string.IsNullOrEmpty(job.DescriptChange)
                                 ? $"Lý do : {job.Reason} - {job.DescriptChange}"
                                 : $"Lý do : {job.Reason}";
                         }
-                        // Logic Job 005: Báo xuất hóa đơn / Thanh toán
-                        else if (job.FactorID == JobFactor.JOB_00005.ToString())
+                        else if (job.FactorID == JobFactor.JOB_00005.ToString() && !string.IsNullOrEmpty(job.DescriptChange))
                         {
-                            if (!string.IsNullOrEmpty(job.DescriptChange))
-                            {
-                                targetHistory.CancelDescript = "Ghi chú bổ sung : " + job.DescriptChange;
-                            }
+                            jobNote = "Ghi chú bổ sung : " + job.DescriptChange;
+                        }
+
+                        if (!string.IsNullOrEmpty(jobNote))
+                        {
+                            if (string.IsNullOrEmpty(targetHistory.CancelDescript))
+                                targetHistory.CancelDescript = jobNote;
+                            else
+                                targetHistory.CancelDescript += " | " + jobNote;
                         }
                     }
                 }
             }
-
             response.HistoryList = historyList;
             return ApiResponse<EContractHistoryResponse>.SuccessResponse(response, "Lấy lịch sử thành công.");
         }
+
+        public async Task<List<JobEntity>> GetJobKTbyOID(string oid)
+        {
+            if (string.IsNullOrEmpty(oid)) return new List<JobEntity>();
+
+            var data = await _eContractRepository.GetJobKTbyOID(oid);
+
+            return data.OrderByDescending(x => x.crt_date).ToList();
+        }
+
+        public async Task<ApiResponse<List<EContractDetails>>> GetEContractDetailsActionAsync(string oid)
+        {
+            if (string.IsNullOrEmpty(oid))
+                return ApiResponse<List<EContractDetails>>.ErrorResponse("OID không hợp lệ.");
+
+            string cleanOid = oid.Replace("%2F", "/").Replace("%2f", "/");
+            cleanOid = System.Net.WebUtility.UrlDecode(cleanOid);
+
+            var details = await _eContractRepository.GetEContractDetailsNewAsync(cleanOid);
+
+            if (details == null || !details.Any())
+            {
+                return ApiResponse<List<EContractDetails>>.SuccessResponse(new List<EContractDetails>(), "Không tìm thấy dữ liệu.");
+            }
+
+            return ApiResponse<List<EContractDetails>>.SuccessResponse(details, "Lấy chi tiết hợp đồng thành công.");
+        }
+
+        public async Task<ApiResponse<EContractDetailsViewModel>> GetJobDetailsAsync(string oid, string kt = "0")
+        {
+            string cleanOid = System.Net.WebUtility.UrlDecode(oid).Replace("%2F", "/");
+
+            if (kt == "1")
+            {
+                await _eContractRepository.DeleteJob01Async(cleanOid);
+            }
+
+            var raw = await _eContractRepository.GetEContractRawDataAsync(cleanOid);
+            if(raw == null)
+            {
+                return ApiResponse<EContractDetailsViewModel>.ErrorResponse("Không tìm thấy dữ liệu hợp đồng.");
+            }
+            var model = new EContractDetailsViewModel();
+            //1.Mapping cơ bản
+            MapBasicData(model, raw);
+            //2.Xử lý Flag.
+            ProcessInterfaceFlags(model, raw);
+
+            await HandleAutomaticJobAsync(model, raw, cleanOid, kt);
+
+            return ApiResponse<EContractDetailsViewModel>.SuccessResponse(model, "Lấy thông tin thành công.");
+        }
+        #region Handle API get-job-details
+        private void ProcessInterfaceFlags(EContractDetailsViewModel model, EContractHistoryRaw2 raw)
+        {
+            model.IsshowJob = false;
+            model.IsshowJobKT = false;
+            model.IsshowEntry = false;
+            model.IsshowEntryCS = true;
+
+            var jobPostJob = raw.JobPosts.Where(s => s.FactorID == "JOB_00001").ToList();
+            if (jobPostJob.Any())
+            {
+                var currSign = jobPostJob.First().SignNumb;
+                if (currSign == "501")
+                {
+                    model.IsshowJob = true;
+                    model.IsshowJobKT = true;
+                    model.IsshowEntry = true;
+                    model.IsshowEntryCS = false;
+                }
+            }
+
+            // Check ẩn hiện yêu cầu chỉnh sửa (IsshowYC)
+            model.IsshowYC = raw.JobPosts.Any(s => s.FactorID == "JOB_00001" && s.EntryID == "JB:005" && s.SignNumb == "101");
+
+            // Trạng thái hợp đồng đã ký (IsshowYCCS)
+            model.EContracts.IsshowYCCS = raw.EContract.CurrSignNumb <= 0;
+        }
+        private void MapBasicData(EContractDetailsViewModel model, EContractHistoryRaw2 raw)
+        {
+            model.EContracts = MapToEContractDto(raw.EContract);
+            model.Vendor = MapToVendorDto(raw.Vendor);
+            model.CustomerTaxCode = new CustomerTaxCodeDTO
+            {
+                Title = raw.EContract?.CusName ?? string.Empty,
+                MaSoThue = raw.EContract?.CusTax ?? string.Empty,
+                DiaChiCongTy = raw.EContract?.CusAddress ?? string.Empty
+            };
+
+            model.EContractDetails = raw.EContractDetails
+                .Where(s => s.UsIN == "JOB_00001")
+                .Select(d => MapToDetailDto(d))
+                .ToList();
+
+            if (raw.Jobs != null && raw.Jobs.Any())
+            {
+                model.JobDetail = raw.Jobs.Select(j =>
+                {
+                    var dto = new JobDetailDTO
+                    {
+                        OID = j.OID,
+                        FactorID = j.FactorID,
+                        Crt_Date = j.crt_date,
+                        EntryID = j.EntryID,
+                        EntryName = j.EntryName,
+                        EmplName = j.EmplName,
+                        InvcSign = j.InvcSign,
+                        InvcFrm = j.InvcFrm,
+                        InvcEnd = j.InvcEnd,
+                        InvcSample = j.invcSample,
+                        Descrip = j.Descrip,
+                        DescriptChange = j.DescriptChange?.Replace("\n", "<br/>"),
+                        ReferenceInfo = j.ReferenceInfo,
+
+
+                        IsSave = j.IsSave,
+                        IsDesignInvoices = j.isDesignInvoices,
+
+                        CmpnName = raw.EContract?.CmpnName,
+                        CusName = raw.EContract?.CusName,
+                        CusTax = raw.EContract?.CusTax,
+                        CusAddress = raw.EContract?.CusAddress,
+                        CusEmail = raw.EContract?.CusEmail,
+                        //IsTT78 = raw.EContract?.IsTT78 ?? false,
+                        //IsCheckXHD = raw.EContract?.IsCheckXHD ?? false,
+                        //IsShowCheckXHD = raw.EContract?.IsCheckXHD ?? false,
+                        BankInfo = raw.EContract?.CusBankNumber,
+                        PositionName = raw.EContract?.CusPosition_BySign,
+                        IsshowYCCS = raw.EContract?.CurrSignNumb <= 0,
+                        SignNumb = raw.EContract?.SignNumb
+                    };
+                    return dto;
+                }).ToList();
+            }
+            var currentJobEntity = raw.Jobs.LastOrDefault();
+            if (currentJobEntity != null)
+            {
+                model.Job = MapToJobDto(currentJobEntity);
+            }
+        }
+        private EContractDTO? MapToEContractDto(EContractMaster? eContract)
+        {
+            if (eContract == null) return new EContractDTO();
+
+            return new EContractDTO
+            {
+                OID = eContract.OID,
+                CmpnName = eContract.CmpnName,
+                CusName = eContract.CusName,
+                CusTax = eContract.CusTax,
+                CusAddress = eContract.CusAddress,
+                CusEmail = eContract.CusEmail,
+                CurrSignNumb = eContract.CurrSignNumb,
+                IsTT78 = eContract.IsTT78,
+                IsCheckXHD = eContract.IsCheckXHD,
+                IsShowCheckXHD = eContract.IsCheckXHD, // Logic: isCheckXHD => isShowCheckXHD = true
+                PositionName = eContract.CusPosition_BySign,
+                BankInfo = eContract.CusBankNumber,
+            };
+        }
+        private EContractDetailDTO MapToDetailDto(EContractDetails d)
+        {
+            int calculatedInvcEnd = (d.sl_KM > 0 && d.isKM)
+                                    ? (d.ItemPerBox + d.sl_KM)
+                                    : d.ItemPerBox;
+
+            return new EContractDetailDTO
+            {
+                ItemNo = d.ItemNo,
+                ItemID = d.ItemID,
+                ItemName = d.ItemName,
+                ItemUnit = d.ItemUnit,
+                ItemPrice = d.ItemPrice,
+                ItemQtty = d.ItemQtty,
+                Sum_Amnt = d.Sum_Amnt,
+                VAT_Rate = d.VAT_Rate,
+                InvcSample = d.InvcSample,
+                InvcSign = d.InvcSign,
+                InvcFrm = d.InvcFrm,
+                InvcEnd = calculatedInvcEnd, 
+                UsIN = d.UsIN
+            };
+        }
+        private JobDTO MapToJobDto(JobEntity j)
+        {
+            if (j == null) return new JobDTO();
+
+            return new JobDTO
+            {
+                OID = j.OID,
+                ReferenceID = j.ReferenceID,
+                FactorID = j.FactorID,
+                EntryID = j.EntryID,
+                InvcSign = j.InvcSign,
+                InvcFrm = j.InvcFrm,
+                InvcEnd = j.InvcEnd,
+                InvcSample = j.invcSample,
+                Descrip = j.Descrip
+            };
+        }
+        private JobDetailDTO MapJobPostToDetailDto(JobPost jp)
+        {
+            return new JobDetailDTO
+            {
+                OID = jp.OID,
+                FactorID = jp.FactorID,
+                EntryID = jp.EntryID,
+                EntryName = jp.EntryName,
+                EmplName = jp.EmplName,
+                DescriptChange = jp.DescriptChange,
+                Crt_Date = jp.Crt_Date,
+                //SignNumb = jp.SignNumb
+            };
+        }
+        private VendorDTO MapToVendorDto(VendorEntity v)
+        {
+            if (v == null) return new VendorDTO();
+
+            return new VendorDTO
+            {
+                CmpnID = v.cmpnID,
+                VName = v.vName,
+                Director = v.Director,
+                Address = v.Address,
+                TaxCode = v.TaxCode,
+                BankInfo = v.BankInfo,
+                PositionName = v.PositionName,
+                //LogoPath = v.LogoPath,
+                //SignPath = v.SignPath,
+                Tel = v.Tel,
+                Email = v.Website,
+                Website = v.Website,
+            };
+        }
+        public async Task HandleAutomaticJobAsync(EContractDetailsViewModel model, EContractHistoryRaw2 raw, string oid, string kt)
+        {
+            var hasJobTM = raw.Jobs.Any(s => s.FactorID == "JOB_00001");
+            var hasJobKT = raw.Jobs.Any(s => s.FactorID == "JOB_00006");
+
+            if (!hasJobTM && !hasJobKT)
+            {
+                var newJob = new JobEntity
+                {
+                    ReferenceID = oid,
+                    FactorID = kt == "1" ? "JOB_00006" : "JOB_00001",
+                    EntryID = kt == "1" ? "JB:012" : "JB:001",
+                    Crt_User = raw.EContract.Crt_User,
+                    cmpnID = raw.EContract.CmpnID
+                };
+
+                var insertedJob = await _eContractRepository.InsertJobAsync(newJob);
+                model.Job = MapToJobDto(insertedJob);
+                model.IsshowEntry = true;
+            }
+        }
+
+        #endregion
+
+
+        public async Task<PagedResponse<DepartmentDTO>> GetDepartmentsPagedAsync(string operDeptList, int pageNumber, int pageSize)
+        {
+            if (string.IsNullOrEmpty(operDeptList))
+                return PagedResponse<DepartmentDTO>.Create(new List<DepartmentDTO>(), pageNumber, pageSize, 0);
+
+            var ids = operDeptList.Replace(',', ';')
+                                  .Split(';', StringSplitOptions.RemoveEmptyEntries)
+                                  .Select(x => x.Trim());
+
+            var allResults = new List<DepartmentsEntity>();
+
+            foreach (var id in ids)
+            {
+                var data = await _eContractRepository.GetDepartmentsByOidAsync(id);
+                allResults.AddRange(data);
+            }
+
+            int totalRecords = allResults.Count;
+            var pagedData = allResults.OrderBy(x => x.DID)
+                                      .Skip((pageNumber - 1) * pageSize)
+                                      .Take(pageSize)
+                                      .Select(d => new DepartmentDTO
+                                      {
+                                          DID = d.DID,
+                                          DNAME = d.DNAME,
+                                          ParentID = d.ParentID,
+                                          ROOM = d.ROOM,
+                                      }).ToList();
+
+            return PagedResponse<DepartmentDTO>.Create(pagedData, pageNumber, pageSize, totalRecords);
+        }
+
+        public async Task<ApiResponse<List<EContractDetailDTO>>> VerifyJobDetailsAsync(string cusTax, string oid)
+        {
+            try
+            {
+                var rawDetails = await _eContractRepository.VerifyJobAsync(cusTax, oid);
+                var detailDtos = rawDetails.Select(d => MapToDetailDto(d)).ToList();
+                return ApiResponse<List<EContractDetailDTO>>.SuccessResponse(detailDtos, "Xác thực Job thành công.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<List<EContractDetailDTO>>.ErrorResponse("Có lỗi xảy ra trong quá trình xác thực.");
+            }
+        }
+
+        public async Task<ApiResponse<object>> UploadContractFilesAsync(IFormFileCollection files)
+        {
+            var uploadedPaths = new List<string>();
+            long totalSize = files.Sum(f => f.Length);
+
+            foreach (var file in files)
+            {
+                string path = await _fileStorageService.UploadFileAsync(file, file.Name);
+                if (path != null) uploadedPaths.Add(path);
+            }
+
+            return ApiResponse<object>.SuccessResponse(new
+            {
+                FileCount = uploadedPaths.Count,
+                TotalSize = totalSize,
+                Paths = uploadedPaths
+            }, "Upload file thành công.");
+        }
+
+        public async Task<ApiResponse<object>> SaveJobAsync(SaveJobRequestDto request, string userCode)
+        {
+            if (string.IsNullOrEmpty(request.EContractOid) || string.IsNullOrEmpty(request.JobOid))
+            {
+                return ApiResponse<object>.ErrorResponse("EContractOid và JobOid không được để trống.");
+            }
+
+            var rawData = await _eContractRepository.GetEContractRawDataAsync(request.EContractOid);
+            var master = rawData.EContract;
+
+            if (master == null) return ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin hợp đồng.");
+
+            int? nextCount = rawData.Jobs.Any(j => j.EntryID == "JB:005")
+                             ? (rawData.Jobs.First(j => j.EntryID == "JB:005").CountChange + 1)
+                             : 1;
+
+            // Ghép chuỗi Info chuẩn theo logic cũ
+            string info = request.Job.IsDesignInvoices
+                ? $"{request.EmplName} đề nghị kiểm tra mẫu đã tạo {master.CusTax}-{master.CusName}-{master.CusAddress}"
+                : $"{request.EmplName} {request.EntryName} {master.CusTax}-{master.CusName}-{master.CusAddress}";
+
+            // Tính toán sumInvc
+            int sumInvc = 0;
+            foreach (var item in request.Details)
+            {
+                if (item.IsKM && item.InvcEnd != item.ItemPerBox)
+                {
+                    item.InvcEnd -= item.sl_KM;
+                }
+                sumInvc += item.InvcEnd;
+            }
+
+            try
+            {
+                var jobEntity = new JobEntity
+                {
+                    OID = request.JobOid, 
+                    ReferenceID = request.EContractOid, 
+                    FactorID = request.Job.FactorID,
+                    EntryID = request.Job.EntryID,
+                    TemplateID = request.Job.TemplateID,
+                    OperDept = request.Job.OperDept,
+                    isDesignInvoices = request.Job.IsDesignInvoices,
+                    FileOther = request.Job.FileOther,
+                    FileName0 = request.Job.FileName0,
+                    FileName1 = request.Job.FileName1,
+                    ChangeOption = request.Job.ChangeOption,
+                    DescriptChange = request.Job.DescriptChange,
+                    Crt_User = userCode 
+                };
+
+                var jobPackEntities = request.Packs.Select(p => new JobPackEntity
+                {
+                    ItemID = p.ItemID,
+                    ItemNo = p.ItemNo, //
+                    InvcSign = p.InvcSign,
+                    invcSample = p.InvcSample,
+                    InvcFrm = p.InvcFrm,
+                    InvcEnd = p.InvcEnd,
+                    PublDate = p.PublDate,
+                    Use_Date = p.Use_Date,
+                    Descrip = p.Descrip 
+                }).ToList();
+
+                await _eContractRepository.UpdateJobSaveAsync(
+                    jobEntity,
+                    jobPackEntities,
+                    sumInvc,
+                    nextCount,
+                    info,
+                    request.Description);
+
+                return ApiResponse<object>.SuccessResponse(null, "Lưu yêu cầu thành công");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi khi lưu dữ liệu vào hệ thống.");
+            }
+        }
+
+        public async Task<ApiResponse<object>> ApproveJobNowAsync(ApproveJobRequestDto request, string userCode, string fullName)
+        {
+            if (string.IsNullOrEmpty(request.Oid) || string.IsNullOrEmpty(request.CmpnId))
+            {
+                return ApiResponse<object>.ErrorResponse("Dữ liệu Oid và CmpnId không được để trống.");
+            }
+
+            var limit = await _eContractRepository.limitcn(request.CmpnId, userCode, "0000006");
+
+            if (limit != null && limit.CONNO > limit.GIOIHANCN)
+            {
+                return ApiResponse<object>.SuccessResponse(new
+                {
+                    conNo = limit.CONNO.ToString("N0"),
+                    gioiHanCN = limit.GIOIHANCN.ToString("N0")
+                }, "Công nợ hiện tại đã vượt quá giới hạn cho phép. Vui lòng thanh toán.", 2);
+            }
+
+            var rawData = await _eContractRepository.GetEContractRawDataAsync(request.Oid);
+            if (rawData.EContract == null || rawData.Jobs == null)
+            {
+                return ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin hợp đồng trong hệ thống.");
+            }
+            var master = rawData.EContract;
+            master.SaleFullName = fullName;
+
+            var jobDetailDec = rawData.Jobs.FirstOrDefault(j =>
+                j.FactorID == "JOB_00001" && (j.EntryID == "JB:001" || j.EntryID == "JB:002"));
+
+            if (jobDetailDec == null)
+            {
+                return ApiResponse<object>.ErrorResponse("Yêu cầu không thuộc bước tạo mẫu hoặc đã qua bước này.");
+            }
+
+            var zsEntity = new ZsgnEContractJob
+            {
+                FactorID = jobDetailDec.FactorID,
+                OID = jobDetailDec.OID,
+                ReferenceID = request.Oid, 
+                ODate = DateTime.Now,
+                CmpnID = rawData.EContract.CmpnID,
+                Crt_User = userCode,
+                EntryID = jobDetailDec.EntryID,
+                AppvMess = $"{fullName} duyệt yêu cầu từ Portal",
+                DataTbl = "EContractJobs",
+                Variant30 = "1"
+            };
+
+            int currentHoldSign = 0;
+            if (jobDetailDec.FactorID == "JOB_00001" && rawData.JobPosts.Any() && rawData.JobPosts[0].SignNumb == "100")
+            {
+                currentHoldSign = 100;
+            }
+
+            if (jobDetailDec.FactorID == "JOB_00003") currentHoldSign = 0;
+
+
+            try
+            {
+                bool isSuccess = await _eContractRepository.ApproveContractJobAsync(zsEntity, currentHoldSign, 101);
+
+                if (!isSuccess)
+                {
+                    return ApiResponse<object>.ErrorResponse("Duyệt thất bại. Trạng thái Job có thể đã thay đổi bởi người khác.");
+                }
+
+                var emailData = await _eContractRepository.GetEmailUserDeptAsync(jobDetailDec.OID);
+                if (emailData?.EmailUserDept != null)
+                {
+                    await _mailService.SendApproveNotificationAsync(
+                        emailData.EmailUserDept,
+                        rawData.EContract,
+                        request.Oid,
+                        jobDetailDec.FactorID);
+                }
+
+                return ApiResponse<object>.SuccessResponse(null, "Duyệt yêu cầu thành công!");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse($"Lỗi hệ thống khi thực thi duyệt: {ex.Message}");
+            }
+        }
     }
 }
+
 
 

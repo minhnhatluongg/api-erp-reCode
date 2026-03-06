@@ -56,6 +56,7 @@ namespace ERP_Portal_RC.Application.Services
                 new Claim("Grp_List", user.Grp_List), 
                 new Claim("CmpnID", user.CmpnID),
                 new Claim("DefaultAppSite", user.DefaultAppSite ?? "Bos"),
+                new Claim("OperDeptList", user.OperDeptList ?? string.Empty),
 
             };
 

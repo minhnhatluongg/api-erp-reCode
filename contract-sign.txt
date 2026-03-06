@@ -1,0 +1,788 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Net.Http;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using Gonsa.Application.Helpers;
+using Gonsa.Application.Models.EContract;
+using Gonsa.Application.Repositories;
+using Gonsa.Repository.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace Gonsa.Application.Api
+{
+    [Authorize]
+    [Route("api/[controller]")]
+    [ApiController]
+    public class ContractSignController : ControllerBase
+    {
+        private readonly IEContractRepository _eContractRepository;
+        private readonly IGonSaConnection _gonSaConnection;
+        private readonly IConfiguration _configuration;
+        private readonly IHttpClientFactory _httpClientFactory;
+
+        public ContractSignController(
+            IEContractRepository eContractRepository,
+            IGonSaConnection gonSaConnection,
+            IConfiguration configuration,
+            IHttpClientFactory httpClientFactory)
+        {
+            _eContractRepository = eContractRepository;
+            _gonSaConnection = gonSaConnection;
+            _configuration = configuration;
+            _httpClientFactory = httpClientFactory;
+        }
+
+        #region Main Sign Contract API
+       
+        [HttpPost("Sign")]
+        public async Task<ActionResult> SignContract([FromBody] SignContractRequestDto request)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return Ok(new { Status = -1, Message = "Dữ liệu không hợp lệ" });
+                }
+
+                var userName = User.FindFirstValue(ClaimTypes.Name);
+                if (string.IsNullOrEmpty(request.ReqUser))
+                {
+                    request.ReqUser = userName ?? "system";
+                }
+
+                IContractSignRepository signRepository = GetSignRepository(request.SignMethod);
+
+                var result = await signRepository.SignContractAsync(request);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Ok(new { Status = -1, Message = "Lỗi khi ký hợp đồng", ExMessage = ex.Message });
+            }
+        }
+        //Check đã kí chưa (an toàn)
+        [HttpGet("IsSigned")]
+        public async Task<ActionResult> IsSigned(string oid)
+        {
+            try
+            {
+                using (var connection = _gonSaConnection.GetConnection())
+                {
+                    await connection.OpenAsync();
+                    using (var command = connection.CreateCommand())
+                    {
+                        // Kiểm tra sự tồn tại trong bảng ECtr_PublicInfo
+                        command.CommandText = "SELECT COUNT(1) FROM [BosControlEVAT].dbo.ECtr_PublicInfo WHERE InvcCode = @OID";
+                        command.Parameters.Add(new SqlParameter("@OID", SqlDbType.VarChar, 50) { Value = oid });
+
+                        int count = Convert.ToInt32(await command.ExecuteScalarAsync());
+
+                        return Ok(new
+                        {
+                            IsSigned = count > 0,
+                            Message = count > 0 ? "Hợp đồng này đã được ký số trước đó." : "Chưa ký"
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Ok(new { IsSigned = false, Message = "Lỗi check trạng thái: " + ex.Message });
+            }
+        }
+
+        /// Kiểm tra trạng thái ký hợp đồng
+        [HttpGet("CheckStatus")]
+        public async Task<ActionResult> CheckSignStatus(string oid, string signMethod = "SERVER")
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(oid))
+                {
+                    return Ok(new { Status = -1, Message = "Mã hợp đồng không được để trống" });
+                }
+
+                IContractSignRepository signRepository = GetSignRepository(signMethod);
+                var result = await signRepository.CheckSignStatusAsync(oid);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Ok(new { Status = -1, Message = "Lỗi khi kiểm tra trạng thái", ExMessage = ex.Message });
+            }
+        }
+
+        #endregion
+
+        #region App Signing APIs (theo document)
+
+        /// API 2.a: Tiếp nhận trạng thái xử lý từ SignApp (Callback)
+        /// SignApp gọi API này để đẩy trạng thái xử lý ký
+        [AllowAnonymous] 
+        [HttpPost("ReceiveSignStatus")]
+        [HttpPost("/api/invoice/change_status")]  
+        public async Task<ActionResult> ReceiveSignStatus([FromBody] SignStatusCallbackRequest request)
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return Ok(new
+                    {
+                        IsSuccess = false,
+                        Message = "Request is null",
+                        ReturnDate = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
+                    });
+                }
+                
+                if (string.IsNullOrEmpty(request.ProcessName))
+                {
+                    Console.WriteLine("[ReceiveSignStatus] ERROR: ProcessName is null or empty");
+                    return Ok(new
+                    {
+                        IsSuccess = false,
+                        Message = "ProcessName is required",
+                        ReturnDate = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
+                    });
+                }
+                
+                int statusInt = 0;
+                if (!string.IsNullOrEmpty(request.Status))
+                {
+                    if (int.TryParse(request.Status, out int parsedStatus))
+                    {
+                        statusInt = parsedStatus;
+                    }
+                    else
+                    {
+                        statusInt = request.Status.ToUpper() switch
+                        {
+                            "PENDING" => 0,
+                            "PROCESSING" => 1,
+                            "SUCCESS" => 2,
+                            "ERROR" => -1,
+                            "FAILED" => -1,
+                            _ => 0
+                        };
+                    }
+                }
+                
+                using (var connection = _gonSaConnection.GetConnection())
+                {
+                    await connection.OpenAsync();
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = @"
+                            UPDATE [BosEVAT].dbo.EVAT_AppSign_Process
+                            SET Status = @Status,
+                                StatusMessage = @Message,
+                                CompletedDate = CASE WHEN @Status IN (2, -1) THEN GETDATE() ELSE CompletedDate END
+                            WHERE KeyUID = @ProcessName";
+
+                        command.Parameters.Add(new SqlParameter("@ProcessName", SqlDbType.VarChar, 50) { Value = request.ProcessName });
+                        command.Parameters.Add(new SqlParameter("@Status", SqlDbType.Int) { Value = statusInt });  // Use parsed int
+                        command.Parameters.Add(new SqlParameter("@Message", SqlDbType.NVarChar, -1) { Value = request.Message ?? "" });
+
+                        int rowsAffected = await command.ExecuteNonQueryAsync();
+                        
+                        return Ok(new
+                        {
+                            IsSuccess = rowsAffected > 0,
+                            Data = new { ApiInfo = "" },
+                            Message = rowsAffected > 0 ? "Cập nhật trạng thái thành công" : "Không tìm thấy process",
+                            ReturnDate = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ReceiveSignStatus] ERROR: {ex.Message}");
+                Console.WriteLine($"[ReceiveSignStatus] Stack trace: {ex.StackTrace}");
+                return Ok(new
+
+                {
+                    IsSuccess = false,
+                    Data = new { ApiInfo = "" },
+                    Message = "Lỗi: " + ex.Message,
+                    ReturnDate = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
+                });
+            }
+        }
+
+        /// API 2.b: Valid JWT
+        /// Kiểm tra chuỗi JWT hợp lệ
+        [AllowAnonymous]
+        [HttpPost("ValidJwt")]
+        [HttpPost("/api/process/valid_jwt")]
+        public ActionResult ValidJwt([FromBody] ValidJwtRequest request)
+        {
+            try
+            {
+                string payloadString = JwtHelper.GetPayloadFromJwt(request.Jwt);
+
+                if (string.IsNullOrEmpty(payloadString))
+                {
+                    return Ok(new ValidJwtResponse
+                    {
+                        IsSuccess = false,
+                        Message = "JWT không hợp lệ hoặc không thể decode",
+                        ReturnDate = DateTime.Now
+                    });
+                }
+                
+                string apiUser = _configuration["AppSettings:ApiUser"] ?? "api_user";
+                string apiPassword = _configuration["AppSettings:ApiPassword"] ?? "api_password";
+                string apiInfoPlain = $"{apiUser}-_-{apiPassword}";
+                string apiInfo = BosEncryptionHelper.BosEncrypt(apiInfoPlain);
+
+                return Ok(new ValidJwtResponse
+                {
+                    IsSuccess = true,
+                    Message = "JWT hợp lệ",
+                    Data = new ValidJwtData 
+                    { 
+                        ApiInfo = apiInfo,
+                        resJWT = request.Jwt  
+                    },
+                    ReturnDate = DateTime.Now
+                });
+            }
+            catch (Exception ex)
+            {
+                return Ok(new ValidJwtResponse
+                {
+                    IsSuccess = false,
+                    Message = "Lỗi: " + ex.Message,
+                    ReturnDate = DateTime.Now
+                });
+            }
+        }
+
+        /// API 2.c: Get Invoice Param
+        /// Lấy dữ liệu yêu cầu xử lý (danh sách OID cần ký)
+        [AllowAnonymous]
+        [HttpPost("GetInvParam")]
+        [HttpPost("/api/invoice/get_inv_param")]
+        public async Task<ActionResult> GetInvParam([FromBody] GetInvParamRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrEmpty(request.KeyID))
+                {
+                    Console.WriteLine("[GetInvParam] ERROR: Request or KeyID is null");
+                    return Ok(new GetInvParamResponse
+                    {
+                        IsSuccess = false,
+                        Message = "KeyID is required",
+                        Data = new List<InvParamData>(),
+                        ReturnDate = DateTime.Now
+                    });
+                }
+                
+                using (var connection = _gonSaConnection.GetConnection())
+                {
+                    await connection.OpenAsync();
+                    using (var command = connection.CreateCommand())
+                    {
+                        command.CommandText = @"
+                            SELECT OID
+                            FROM [BosEVAT].dbo.EVAT_AppSign_Process
+                            WHERE REPLACE(REPLACE(UPPER(KeyUID), '_', ''), '-', '') = @KeyID 
+                              AND Status = 0";
+
+                        command.Parameters.Add(new SqlParameter("@KeyID", SqlDbType.VarChar, 50) { Value = request.KeyID });
+
+                        var data = new List<InvParamData>();
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var oid = reader.GetString(0);
+                                Console.WriteLine($"[GetInvParam] Found OID: {oid}");
+                                data.Add(new InvParamData
+                                {
+                                    InvOID = oid
+                                });
+                            }
+                        }
+
+                        Console.WriteLine($"[GetInvParam] Total records: {data.Count}");
+
+                        return Ok(new GetInvParamResponse
+                        {
+                            IsSuccess = data.Count > 0,
+                            Message = data.Count > 0 ? "OK" : "Không tìm thấy hợp đồng cần ký",
+                            Data = data,
+                            ReturnDate = DateTime.Now
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GetInvParam] ERROR: {ex.Message}");
+                Console.WriteLine($"[GetInvParam] Stack trace: {ex.StackTrace}");
+                return Ok(new GetInvParamResponse
+                {
+                    IsSuccess = false,
+                    Message = "Lỗi: " + ex.Message,
+                    Data = new List<InvParamData>(),
+                    ReturnDate = DateTime.Now
+                });
+            }
+        }
+
+        /// <summary>
+        /// API 2.d: Get XML All
+        /// Lấy XML để ký số
+        /// </summary>
+        [AllowAnonymous]
+        [HttpPost("GetXmlAll")]
+        [HttpPost("/api/invoice/get_xml_all")]
+        public async Task<ActionResult> GetXmlAll([FromBody] GetXmlAllRequest request)
+        {
+            try
+            {
+                // 1. Lấy PayloadData từ database
+                string payloadJson = await GetPayloadDataAsync(request.Oid);
+                if (string.IsNullOrEmpty(payloadJson))
+                {
+                    return Ok(new GetXmlAllResponse
+                    {
+                        IsSuccess = false,
+                        Message = "Không tìm thấy payload data cho hợp đồng",
+                        ReturnDate = DateTime.Now
+                    });
+                }
+
+                // 2. Tạo XML content
+                string xmlContent = await CreateContractXml(request.Oid,payloadJson);
+                if (string.IsNullOrEmpty(xmlContent))
+                {
+                    return Ok(new GetXmlAllResponse
+                    {
+                        IsSuccess = false,
+                        Message = "Không thể tạo XML cho hợp đồng",
+                        ReturnDate = DateTime.Now
+                    });
+                }
+
+                // 3. Base64 encode XML
+                string xmlBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(xmlContent));
+
+                // 4. Tạo node info
+                string nodeToStore = "//HDong/DSCKS/NBan";
+                string nodeToSign = "//HDong/DLHDong";
+                string nodeSignID = "hdong-" + request.Oid.Replace("/", "-").Replace(":", "-");
+
+                return Ok(new GetXmlAllResponse
+                {
+                    IsSuccess = true,
+                    Message = "OK",
+                    Data = new GetXmlAllData
+                    {
+                        XmlContent = xmlBase64,
+                        IsSigned = 0,
+                        NodeToStore = nodeToStore,
+                        NodeToSign = nodeToSign,
+                        NodeSignID = nodeSignID,
+                        SignTime = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
+                    },
+                    ReturnDate = DateTime.Now
+                });
+            }
+            catch (Exception ex)
+            {
+                return Ok(new GetXmlAllResponse
+                {
+                    IsSuccess = false,
+                    Message = "Lỗi: " + ex.Message,
+                    ReturnDate = DateTime.Now
+                });
+            }
+        }
+
+        /// <summary>
+        /// API 2.e: Set Signed XML
+        /// Đẩy dữ liệu XML đã ký số lên server
+        /// </summary>
+        [AllowAnonymous]
+        [HttpPost("SetSignedXml")]
+        [HttpPost("/api/invoice/set_xml_all")]
+        public async Task<ActionResult> SetSignedXml([FromBody] SetSignedXmlRequest request)
+        {
+            try
+            {
+                if (request == null || string.IsNullOrEmpty(request.XmlContentBase64))
+                {
+                    return Ok(new { IsSuccess = false, Message = "Dữ liệu yêu cầu bị rỗng" });
+                }
+                byte[] xmlBytes = Convert.FromBase64String(request.XmlContentBase64);
+                string signedXmlContent = System.Text.Encoding.UTF8.GetString(xmlBytes);
+
+                // 2. Lưu signed XML vào database và gọi stored procedure tương tự VB.NET
+                bool success = await SaveSignedXmlAsync(request.Oid, signedXmlContent, request.AppSignVersion, request.TokenSerial);
+
+                if (success)
+                {
+                    // 3. Update status của App signing process
+                    await UpdateAppSignStatusAsync(request.Oid, 2, "Đã ký thành công");
+
+                    return Ok(new SetSignedXmlResponse
+                    {
+                        IsSuccess = true,
+                        Message = "Lưu XML đã ký thành công",
+                        Data = new SetSignedXmlData { MaTD = "" },
+                        ReturnDate = DateTime.Now
+                    });
+                }
+                else
+                {
+                    return Ok(new SetSignedXmlResponse
+                    {
+                        IsSuccess = false,
+                        Message = "Không thể lưu XML đã ký",
+                        ReturnDate = DateTime.Now
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Ok(new SetSignedXmlResponse
+                {
+                    IsSuccess = false,
+                    Message = "Lỗi: " + ex.Message,
+                    ReturnDate = DateTime.Now
+                });
+            }
+        }
+
+        #endregion
+
+        #region Private Helper Methods
+
+        /// Get appropriate sign repository based on method
+        private IContractSignRepository GetSignRepository(string signMethod)
+        {
+            signMethod = signMethod?.ToUpper() ?? "SERVER";
+
+            return signMethod switch
+            {
+                "APP" => new SignAppRepository(_gonSaConnection, _configuration),
+                "HSM" => new SignHSMRepository(_gonSaConnection, _configuration, _httpClientFactory, CreateContractXml),
+                _ => new SignServerRepository(_eContractRepository) // Default: SERVER
+            };
+        }
+       
+        private async Task<string> GetPayloadDataAsync(string oid)
+        {
+            using (var connection = _gonSaConnection.GetConnection())
+            {
+                await connection.OpenAsync();
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = @"
+                        SELECT TOP 1 PayloadDataJson
+                        FROM [BosEVAT].dbo.EVAT_AppSign_Process
+                        WHERE OID = @OID
+                        ORDER BY CreatedDate DESC";
+
+                    command.Parameters.Add(new SqlParameter("@OID", SqlDbType.VarChar, 50) { Value = oid });
+
+                    var result = await command.ExecuteScalarAsync();
+                    return result?.ToString() ?? "";
+                }
+            }
+        }
+
+        /// <summary>
+        /// Tạo XML content cho hợp đồng (simplified version - cần implement đầy đủ như VB.NET)
+        /// </summary>
+        private async Task<string> CreateContractXml(string oid, string payloadJson)
+        {
+            try
+            {
+                var data = Newtonsoft.Json.Linq.JObject.Parse(payloadJson);
+                string xmlTemplate = await LoadXmlTemplate("TT78_EContract", "26");
+                if (string.IsNullOrEmpty(xmlTemplate))
+                {
+                    Console.WriteLine("[CreateContractXml] Template HDONG_B not found or empty.");
+                    return null;
+                }
+
+                var sbProducts = new System.Text.StringBuilder();
+                var products = data["Products"] as Newtonsoft.Json.Linq.JArray;
+
+                if (products != null)
+                {
+                    int idx = 1;
+                    foreach (var item in products)
+                    {
+                        decimal qtty = item["Quantity"]?.Value<decimal>() ?? 0;
+                        decimal price = item["Price"]?.Value<decimal>() ?? 0;
+                        decimal amount = item["Amount"]?.Value<decimal>() ?? 0;
+
+                        sbProducts.Append("<HHDVu>"); 
+                        sbProducts.Append($"<STT>{idx++}</STT>");
+                        
+                        // Tên sản phẩm
+                        string escapedName = System.Security.SecurityElement.Escape(item["Name"]?.ToString() ?? "");
+                        sbProducts.Append($"<THHDVu>{escapedName}</THHDVu>");
+                        sbProducts.Append($"<ItemName>{escapedName}</ItemName>");
+                        sbProducts.Append($"<itemName>{escapedName}</itemName>");
+                        
+                        // Đơn vị tính
+                        string unit = (item["Unit"]?.ToString() ?? "").Trim();
+                        sbProducts.Append($"<DVTinh>{unit}</DVTinh>");
+                        sbProducts.Append($"<itemUnitName>{unit}</itemUnitName>");
+                        sbProducts.Append($"<ItemUnit>{unit}</ItemUnit>");
+                        
+                        // Số lượng
+                        sbProducts.Append($"<SLuong>{qtty}</SLuong>");
+                        sbProducts.Append($"<ItemQtty>{qtty}</ItemQtty>");
+                        sbProducts.Append($"<itemQtty>{qtty}</itemQtty>");
+                        
+                        // Đơn giá
+                        sbProducts.Append($"<DGia>{price}</DGia>");
+                        sbProducts.Append($"<ItemPrice>{price}</ItemPrice>");
+                        sbProducts.Append($"<itemPrice>{price}</itemPrice>");
+                        
+                        // Thành tiền
+                        sbProducts.Append($"<ThTien>{amount}</ThTien>");
+                        sbProducts.Append($"<Sum_Amnt>{amount}</Sum_Amnt>");
+                        sbProducts.Append($"<sum_Amnt>{amount}</sum_Amnt>");
+                        
+                        // ✅ Thông tin hóa đơn (Diễn giải) - Redundant tags
+                        string sSample = (item["invcSample"] ?? item["InvcSample"])?.ToString() ?? "";
+                        string sSign = (item["invcSign"] ?? item["InvcSign"])?.ToString() ?? "";
+                        int invcFrm = (item["invcFrm"] ?? item["InvcFrm"])?.Value<int>() ?? 0;
+                        int invcEnd = (item["invcEnd"] ?? item["InvcEnd"])?.Value<int>() ?? 0;
+                        string sFrm = (invcFrm > 0 ? invcFrm.ToString() : "");
+                        string sEnd = (invcEnd > 0 ? invcEnd.ToString() : "");
+                        
+                        sbProducts.Append($"<MSo>{sSample}</MSo>");
+                        sbProducts.Append($"<invcSample>{sSample}</invcSample>");
+                        sbProducts.Append($"<InvcSample>{sSample}</InvcSample>");
+                        
+                        sbProducts.Append($"<KHieu>{sSign}</KHieu>");
+                        sbProducts.Append($"<InvcSign>{sSign}</InvcSign>");
+                        sbProducts.Append($"<invcSign>{sSign}</invcSign>");
+                        
+                        sbProducts.Append($"<TSo>{sFrm}</TSo>");
+                        sbProducts.Append($"<InvcFrm>{sFrm}</InvcFrm>");
+                        sbProducts.Append($"<invcFrm>{sFrm}</invcFrm>");
+                        
+                        sbProducts.Append($"<DSo>{sEnd}</DSo>");
+                        sbProducts.Append($"<InvcEnd>{sEnd}</InvcEnd>");
+                        sbProducts.Append($"<invcEnd>{sEnd}</invcEnd>");
+                        
+                        // Tag bổ sung cho "Diễn giải" if XSLT check specific property
+                        sbProducts.Append($"<Description>{escapedName}</Description>");
+                        
+                        sbProducts.Append("</HHDVu>");
+                    }
+                }
+
+                DateTime orderDate;
+                if (!DateTime.TryParse(data["OrderDate"]?.ToString(), out orderDate))
+                {
+                    orderDate = DateTime.Now;
+                }
+                
+                var companyInfo = data["CompanyInfo"];
+                
+                decimal totalAmount = data["TotalAmount"]?.Value<decimal>() ?? 0;
+                
+                string finalXml = xmlTemplate
+            .Replace("{order_code}", oid ?? data["OrderCode"]?.ToString() ?? "ĐANG TẠO")
+            .Replace("{order_date_day}", orderDate.Day.ToString("00"))
+            .Replace("{order_date_month}", orderDate.Month.ToString("00"))
+            .Replace("{order_date_year}", orderDate.Year.ToString())
+            //Thông tin đối tác Bên A (Khách hàng) - Sử dụng đúng tên property
+            .Replace("{partner_name}", System.Security.SecurityElement.Escape(data["PartnerName"]?.ToString() ?? ""))
+            .Replace("{partner_vat}", data["PartnerVAT"]?.ToString() ?? "")
+            .Replace("{partner_address}", System.Security.SecurityElement.Escape(data["PartnerAddress"]?.ToString() ?? ""))
+            .Replace("{partner_bank_no}", data["PartnerBankAccount"]?.ToString() ?? "")
+            .Replace("{partner_bank_title}", System.Security.SecurityElement.Escape(data["PartnerBankName"]?.ToString() ?? ""))
+            //Thông tin người ký Bên A
+            .Replace("{partner_contact_name}", System.Security.SecurityElement.Escape(data["PartnerRepresentative"]?.ToString() ?? ""))
+            .Replace("{partner_legal_value}", System.Security.SecurityElement.Escape(data["PartnerLegalValue"]?.ToString() ?? ""))
+            .Replace("{partner_contact_job}", data["PartnerPosition"]?.ToString() ?? "")
+            .Replace("{partner_phone}", data["PartnerPhone"]?.ToString() ?? "")
+            .Replace("{partner_email}", data["PartnerEmail"]?.ToString() ?? "")
+            //Thông tin Bên B (Công ty) - Từ CompanyInfo
+            .Replace("{company_name}", System.Security.SecurityElement.Escape(companyInfo?["CompanyName"]?.ToString() ?? "CÔNG TY TNHH WIN TECH SOLUTION"))
+            .Replace("{company_vat}", companyInfo?["TaxCode"]?.ToString() ?? "0312303803")
+            .Replace("{company_address}", System.Security.SecurityElement.Escape(companyInfo?["Address"]?.ToString() ?? "59B Bình Giã, Phường Tân Bình, Thành phố Hồ Chí Minh, Việt Nam"))
+            .Replace("{company_representative}", System.Security.SecurityElement.Escape(companyInfo?["Representative"]?.ToString() ?? "LÊ TRẦN THANH DUY"))
+            .Replace("{company_position}", companyInfo?["Position"]?.ToString() ?? "Giám đốc")
+            .Replace("{company_phone}", companyInfo?["Phone"]?.ToString() ?? "19001129")
+            .Replace("{company_email}", companyInfo?["Email"]?.ToString() ?? "info@win-tech.vn")
+            .Replace("{company_bank_no}", companyInfo?["BankAccount"]?.ToString() ?? "68968888")
+            .Replace("{company_bank_title}", System.Security.SecurityElement.Escape(companyInfo?["BankName"]?.ToString() ?? "Ngân hàng TMCP Á Châu - Chi nhánh Bảy Hiền, Tp.HCM"))
+            // Danh sách sản phẩm và tổng tiền
+            .Replace("{ProductLines}", sbProducts.ToString())
+            .Replace("{TgTTTBSo}", totalAmount.ToString("0")) 
+            .Replace("{TgTTTBChu}", NumberToText(totalAmount)); 
+
+                return finalXml;
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+        }
+        public string NumberToText(decimal total)
+        {
+            try
+            {
+                if (total == 0) return "Không đồng chẵn./.";
+
+                string[] unit = { "", " nghìn", " triệu", " tỷ", " nghìn tỷ" };
+                string[] digits = { "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín" };
+                string result = "";
+                long number = (long)Math.Abs(total);
+                int unitIndex = 0;
+
+                while (number > 0)
+                {
+                    int group = (int)(number % 1000);
+                    if (group > 0)
+                    {
+                        string groupText = "";
+                        int h = group / 100;
+                        int t = (group % 100) / 10;
+                        int u = group % 10;
+
+                        // Đọc hàng trăm
+                        if (h > 0 || number > 1000) groupText += digits[h] + " trăm ";
+
+                        // Đọc hàng chục (mươi/mười/lẻ)
+                        if (t > 1) groupText += digits[t] + " mươi ";
+                        else if (t == 1) groupText += "mười ";
+                        else if (h > 0 && u > 0) groupText += "lẻ ";
+
+                        // Đọc hàng đơn vị (mốt/lăm)
+                        if (t > 1 && u == 1) groupText += "mốt ";
+                        else if (t > 0 && u == 5) groupText += "lăm ";
+                        else if (u > 0) groupText += digits[u] + " ";
+
+                        result = groupText + unit[unitIndex] + " " + result;
+                    }
+                    number /= 1000;
+                    unitIndex++;
+                }
+
+                result = result.Trim().Replace("  ", " ");
+                return char.ToUpper(result[0]) + result.Substring(1);
+            }
+            catch { return "Lỗi đọc số"; }
+        }
+
+        /// <summary>
+        /// Load XML template từ database
+        /// </summary>
+        private async Task<string> LoadXmlTemplate(string factorId, string cpmnID)
+        {
+            var template = await _eContractRepository.GetTemplate(factorId, cpmnID);
+            return template.XMLContent ?? string.Empty;
+        }
+
+        /// Lưu signed XML và gọi stored procedure
+        private async Task<bool> SaveSignedXmlAsync(string oid, string signedXml, string appVersion, string tokenSerial)
+        {
+            using (var connection = _gonSaConnection.GetConnection())
+            {
+                await connection.OpenAsync();
+                using (var command = connection.CreateCommand())
+                {
+                    // Compress XML
+                    byte[] xmlBytes = System.Text.Encoding.UTF8.GetBytes(signedXml);
+                    
+                    // Ins_ContractContent_SignedByOdoo_origin
+                    command.CommandText = "[BosControlEVAT].[dbo].[Ins_ContractContent_SignedByOdoo_origin]";
+                    command.CommandType = CommandType.StoredProcedure;
+
+                    // Get contract info from payload
+                    var payloadJson = await GetPayloadDataAsync(oid);
+                    if (string.IsNullOrEmpty(payloadJson))
+                        return false;
+
+                    var data = Newtonsoft.Json.Linq.JObject.Parse(payloadJson);
+                    var comp = data["CompanyInfo"];
+
+                    // Parse OrderDate
+                    DateTime dtOrder = DateTime.Now;
+                    if (data["OrderDate"] != null)
+                    {
+                        DateTime.TryParseExact(data["OrderDate"].ToString(), "dd/MM/yyyy", 
+                            null, System.Globalization.DateTimeStyles.None, out dtOrder);
+                    }
+
+                    command.Parameters.Add(new SqlParameter("@OID", SqlDbType.VarChar, 50) { Value = oid });
+                    command.Parameters.Add(new SqlParameter("@ODate", SqlDbType.Date) { Value = dtOrder.Date });
+                    command.Parameters.Add(new SqlParameter("@PartyASoCCCD", SqlDbType.VarChar, 20) 
+                        { Value = data["PartnerVAT"]?.ToString() ?? "" });  
+                    command.Parameters.Add(new SqlParameter("@PartyATaxcode", SqlDbType.VarChar, 20) 
+                        { Value = data["PartnerVAT"]?.ToString() ?? "" });
+                    command.Parameters.Add(new SqlParameter("@PartyAName", SqlDbType.NVarChar, 512) 
+                        { Value = data["PartnerName"]?.ToString() ?? "" });
+                    command.Parameters.Add(new SqlParameter("@PartyBTaxcode", SqlDbType.VarChar, 20) 
+                        { Value = comp?["TaxCode"]?.ToString() ?? "" });
+                    command.Parameters.Add(new SqlParameter("@PartyBName", SqlDbType.NVarChar, 512) 
+                        { Value = comp?["CompanyName"]?.ToString() ?? "" });
+                    command.Parameters.Add(new SqlParameter("@ECtrlContentXML", SqlDbType.VarChar, -1) 
+                        { Value = Convert.ToBase64String(xmlBytes) });
+
+                    var okParam = new SqlParameter("@OK", SqlDbType.Int) { Direction = ParameterDirection.Output };
+                    var messageParam = new SqlParameter("@Message", SqlDbType.NVarChar, 4000) { Direction = ParameterDirection.Output };
+                    
+                    command.Parameters.Add(okParam);
+                    command.Parameters.Add(messageParam);
+
+                    await command.ExecuteNonQueryAsync();
+                    int ok = (int)(okParam.Value ?? 0);
+                    return ok == 1;
+                }
+            }
+        }
+
+        private async Task UpdateAppSignStatusAsync(string oid, int status, string message)
+        {
+            using (var connection = _gonSaConnection.GetConnection())
+            {
+                await connection.OpenAsync();
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = @"
+                        UPDATE [BosEVAT].dbo.EVAT_AppSign_Process
+                        SET Status = @Status,
+                            StatusMessage = @Message,
+                            CompletedDate = GETDATE()
+                        WHERE OID = @OID";
+
+                    command.Parameters.Add(new SqlParameter("@OID", SqlDbType.VarChar, 50) { Value = oid });
+                    command.Parameters.Add(new SqlParameter("@Status", SqlDbType.Int) { Value = status });
+                    command.Parameters.Add(new SqlParameter("@Message", SqlDbType.NVarChar, -1) { Value = message });
+
+                    await command.ExecuteNonQueryAsync();
+                }
+            }
+        }
+
+        #endregion
+    }
+}
+

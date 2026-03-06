@@ -37,7 +37,6 @@ namespace ERP_Portal_RC.Application.Services
         {
             try
             {
-                // Lấy thông tin user từ database
                 var users = await _customStore.GetUserByLoginNameAsync(request.LoginName, "00");
                 var userOnAp = users.FirstOrDefault();
 
@@ -46,11 +45,8 @@ namespace ERP_Portal_RC.Application.Services
                     _logger.LogWarning("Login failed: User not found - {LoginName}", request.LoginName);
                     return null;
                 }
-
-                // Kiểm tra password - sử dụng SHA1 encryption
                 var encryptedPassword = Sha1.Encrypt(request.Password);
                 
-                // So sánh password
                 if (userOnAp.Password != encryptedPassword)
                 {
                     _logger.LogWarning("Login failed: Invalid password - {LoginName}", request.LoginName);
@@ -81,10 +77,10 @@ namespace ERP_Portal_RC.Application.Services
                         Grp_List = userOnAp.Grp_List ?? string.Empty,
                         LanguageDefault = userOnAp.LanguageDefault ?? "VN",
                         CmpnID = userOnAp.CmpnID_List ?? string.Empty,
-                        DefaultAppSite = defaultAppSite
+                        DefaultAppSite = defaultAppSite,
+                        OperDeptList = userOnAp.OperDeptList ?? "",
                 };
 
-                // Generate tokens sử dụng TokenService
                 var (accessToken, jwtId, expiresAt) = _tokenService.GenerateAccessToken(user);
                 var refreshToken = await _tokenService.GenerateAndSaveRefreshTokenAsync(user.Id, jwtId, ipAddress, userAgent);
 
@@ -181,7 +177,8 @@ namespace ERP_Portal_RC.Application.Services
                     UserCode = userOnAp.UserCode,
                     FullName = userOnAp.FullName ?? string.Empty,
                     UserName = userOnAp.FullName,
-                    Email = $"{userOnAp.Email}"
+                    Email = $"{userOnAp.Email}",
+                    OperDeptList = userOnAp.OperDeptList ?? string.Empty 
                 };
 
                 // Generate new tokens
@@ -283,7 +280,8 @@ namespace ERP_Portal_RC.Application.Services
                     FullName = userOnAp.FullName ?? string.Empty,
                     UserName = userOnAp.FullName ?? string.Empty,
                     Email = $"{userOnAp.FullName}",
-                    DefaultAppSite = userOnAp.AppvSite ?? string.Empty
+                    DefaultAppSite = userOnAp.AppvSite ?? string.Empty,
+                    OperDeptList = userOnAp.OperDeptList ?? string.Empty
                 };
             }
             catch (Exception ex)
