@@ -51,5 +51,27 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId);
         //Nghiệp vụ lịch sử Job 
         Task<EContractHistoryRaw> GetFullHistoryDataAsync(string oid);
+        // Check job có yêu cầu kiểm tra của kd/sales chưa?
+        Task<List<JobEntity>> GetJobKTbyOID(string oid);
+        //Task<EContractsViewModel> GetByOIDJobKT(string OID = "", string KT = "");
+        Task<List<EContractDetails>> GetEContractDetailsNewAsync(string oid);
+        //Get job 
+        Task<EContractHistoryRaw2> GetEContractRawDataAsync(string oid);
+        Task DeleteJob01Async(string oid);
+        Task<JobEntity> InsertJobAsync(JobEntity job);
+        Task UploadFileAsync(JobEntity job);
+        Task<List<DepartmentsEntity>> GetDepartmentsByOidAsync(string did);
+        Task<List<EContractDetails>> VerifyJobAsync(string cusTax, string oid);
+        Task UpdateJobSaveAsync(JobEntity job, List<JobPackEntity> jobPacks, int sumInvc, int? countChange, string info, string descript);
+        Task<Limit> limitcn(string cmpnId, string saleId, string GroupItem);
+        Task<List<ListFile>> GetListFilesAsync(string oid);
+        Task<Right_EContracts?> GetRightEContractsAsync(int currSign, string grpList);
+        Task<byte[]?> GetInvcContentXmlAsync(string oid);
+        Task<EmailUserRawData?> GetEmailUserDeptAsync(string oid);
+        Task<bool> ApproveContractJobAsync(ZsgnEContractJob entity, int holdSignNumb, int nextSignNumb);
+        Task UpdateJobChangeAsync(JobEntity job, int? countChange, string info);
+        Task<string> GetByOIDJobChangeAsync(string OID);
+        //Task<JobEntity> InsertJobChangeYCAsync(JobEntity job); Code later
+
     }
 }

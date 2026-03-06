@@ -4,9 +4,11 @@ using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using System.Transactions;
+using System.Web;
 
 namespace API.ERP_Portal_RC.Controllers
 {
@@ -268,10 +270,6 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
-        /// <summary>
-        /// Phát hành mẫu hóa đơn (Job): Đẩy trạng thái 101 → 201.
-        /// Chỉ cần truyền OID.
-        /// </summary>
         [HttpPost("issue-invoice")]
         [ApiExplorerSettings(IgnoreApi = true)] 
         public async Task<IActionResult> IssueInvoice([FromBody] ApprovalWorkflowRequest model)
@@ -360,6 +358,136 @@ namespace API.ERP_Portal_RC.Controllers
                 return BadRequest(ApiResponse<object>.ErrorResponse("OID không hợp lệ."));
 
             var result = await _econtractService.GetJobHistoryAsync(oid);
+            return Ok(result);
+        }
+
+        [HttpGet("getjobKT")]
+        public async Task<IActionResult> GetJobKT(string OID)
+        {
+            var response = new ApiResponse<List<JobEntity>>();
+
+            try
+            {
+                var result = await _econtractService.GetJobKTbyOID(OID);
+
+                if (result != null && result.Any())
+                {
+                    response.Success = true;
+                    response.Data = result;
+                    response.Message = "Lấy dữ liệu thành công.";
+                    response.StatusCode = 200;
+                    return Ok(response);
+                }
+
+                response.Success = false;
+                response.Message = "Không tìm thấy dữ liệu yêu cầu.";
+                response.StatusCode = 404;
+                return NotFound(response);
+            }
+            catch (Exception ex)
+            {
+                response.Success = false;
+                response.Message = "Đã xảy ra lỗi hệ thống: " + ex.Message;
+                response.StatusCode = 500;
+                return StatusCode(500, response);
+            }
+        }
+
+        [HttpGet("get-details/{oid}")] 
+        public async Task<IActionResult> GetEContractDetails(string oid)
+        {
+            var userName = HttpContext.User.FindFirst(ClaimTypes.Name)?.Value;
+            if (string.IsNullOrEmpty(userName)) return Unauthorized();
+
+            var result = await _econtractService.GetEContractDetailsActionAsync(oid);
+
+            return Ok(result);
+        }
+        /// <summary>
+        /// Lấy chi tiết thông tin Job và Hợp đồng cho giao diện "Yêu cầu tạo mẫu"
+        /// </summary>
+        /// <param name="oid">Mã OID của hợp đồng (Ví dụ: 000642/260302:155826516)</param>
+        /// <param name="kt">Flag kiểm tra kỹ thuật (0: Bình thường, 1: Xóa job cũ tạo job mới)</param>
+        [HttpGet("get-job-details")]
+        public async Task<IActionResult> GetJobDetails([FromQuery] string oid, [FromQuery] string kt = "0")
+        {
+            if (string.IsNullOrEmpty(oid))
+            {
+                return BadRequest(ApiResponse<EContractDetailsViewModel>.ErrorResponse("OID không được để trống."));
+            }
+            var result = await _econtractService.GetJobDetailsAsync(oid, kt);
+            if (!result.Success)
+            {
+                return StatusCode(result.StatusCode, result);
+            }
+
+            return Ok(result);
+        }
+        [HttpGet("get-departments")]
+        public async Task<IActionResult> GetDepartments(int pageSize = 10, int pageNumber = 1)
+        {
+            var operDeptList = User.FindFirst("OperDeptList")?.Value;
+            if (string.IsNullOrEmpty(operDeptList))
+            {
+                return Ok(PagedResponse<DepartmentDTO>.Create(new List<DepartmentDTO>(), pageNumber, pageSize, 0));
+            }
+            var response = await _econtractService.GetDepartmentsPagedAsync(operDeptList, pageNumber, pageSize);
+            return Ok(response);
+        }
+
+        [HttpGet("verify-job")]
+        public async Task<IActionResult> VerifyJob([FromQuery] string cusTax, [FromQuery] string oid)
+        {
+            if (string.IsNullOrEmpty(cusTax) || string.IsNullOrEmpty(oid))
+            {
+                return BadRequest(ApiResponse<List<EContractDetailDTO>>.ErrorResponse("Mã số thuế và OID không được để trống."));
+            }
+            string cleanedOid = System.Net.WebUtility.UrlDecode(oid).Trim();
+            string cleanedTax = cusTax.Trim();
+            var response = await _econtractService.VerifyJobDetailsAsync(cleanedTax, cleanedOid);
+
+            if (!response.Success)
+            {
+                return StatusCode(response.StatusCode, response);
+            }
+            return Ok(response);
+        }
+        [HttpPost("upload-files")]
+        [DisableRequestSizeLimit] 
+        public async Task<IActionResult> UploadFiles(IFormFileCollection files)
+        {
+            if (files == null || files.Count == 0)
+            {
+                return BadRequest(ApiResponse<object>.ErrorResponse("Không có file nào được chọn."));
+            }
+            var response = await _econtractService.UploadContractFilesAsync(files);
+
+            return Ok(response);
+        }
+        [HttpPost("save-job")]
+        public async Task<IActionResult> SaveJob([FromBody] SaveJobRequestDto request)
+        {
+            var fullNameFromToken = User.FindFirst("FullName")?.Value;
+            var userCode = User.FindFirst("UserCode")?.Value;
+
+            if (string.IsNullOrEmpty(fullNameFromToken) || string.IsNullOrEmpty(userCode))
+            {
+                return Unauthorized(ApiResponse<object>.ErrorResponse("Phiên làm việc hết hạn hoặc không hợp lệ."));
+            }
+
+            request.EmplName = fullNameFromToken;
+
+            var response = await _econtractService.SaveJobAsync(request, userCode);
+            return Ok(response);
+        }
+        [HttpPost("approve-job-now")]
+        public async Task<IActionResult> ApproveJobNow([FromBody] ApproveJobRequestDto request)
+        {
+            var userCode = User.FindFirst("UserCode")?.Value;
+            var fullName = User.FindFirst("FullName")?.Value;
+
+            if (string.IsNullOrEmpty(userCode)) return Unauthorized();
+            var result = await _econtractService.ApproveJobNowAsync(request, userCode, fullName);
             return Ok(result);
         }
     }

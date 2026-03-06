@@ -1,0 +1,54 @@
+ Public Function DecryptBOS(ByVal encryptedString As String, Optional key As String = "") As String
+        Try
+            If String.IsNullOrWhiteSpace(key) Then
+                key = "Nghe!Con"
+            End If
+            Dim bytes() As Byte = ASCIIEncoding.ASCII.GetBytes(key)
+
+            If String.IsNullOrEmpty(encryptedString) Then
+                Throw New ArgumentNullException("Null Input String")
+            End If
+            Dim cryptoProvider As DESCryptoServiceProvider = New DESCryptoServiceProvider()
+            Dim memoryStream As MemoryStream = New MemoryStream(Convert.FromBase64String(encryptedString))
+            Dim cryptoStream As CryptoStream = New CryptoStream(memoryStream, cryptoProvider.CreateDecryptor(bytes, bytes), CryptoStreamMode.Read)
+            Dim reader As StreamReader = New StreamReader(cryptoStream)
+            Return reader.ReadToEnd()
+        Catch ex As Exception
+            Util.WriteLogs(False, "DecryptBOS", "DecryptBOS error:" & encryptedString.ToString & " - " & ex.Message, Util.CreateLogFile(LogType.ERROR), True)
+            Return ""
+        End Try
+    End Function
+
+    Public Function EncryptBOS(ByVal inpString As String, Optional key As String = "") As String
+        Try
+            If String.IsNullOrWhiteSpace(key) Then
+                key = "Nghe!Con"
+            End If
+            Dim bytes() As Byte = ASCIIEncoding.ASCII.GetBytes(key)
+
+            If String.IsNullOrEmpty(inpString) Then
+                Throw New ArgumentNullException("Null Input String")
+            End If
+            Dim cryptoProvider As DESCryptoServiceProvider = New DESCryptoServiceProvider()
+            Dim memoryStream As MemoryStream = New MemoryStream()
+            Dim cryptoStream As CryptoStream
+            If String.IsNullOrEmpty(key) Then
+                cryptoStream = New CryptoStream(memoryStream, cryptoProvider.CreateEncryptor(bytes, bytes), CryptoStreamMode.Write)
+            Else
+                Dim keyToBytes As Byte() = ASCIIEncoding.ASCII.GetBytes(key)
+                cryptoStream = New CryptoStream(memoryStream, cryptoProvider.CreateEncryptor(keyToBytes, keyToBytes), CryptoStreamMode.Write)
+            End If
+
+            Dim writer As StreamWriter = New StreamWriter(cryptoStream)
+            writer.Write(inpString)
+            writer.Flush()
+            cryptoStream.FlushFinalBlock()
+            writer.Flush()
+            Return Convert.ToBase64String(memoryStream.GetBuffer(), 0, CType(memoryStream.Length, Integer))
+        Catch ex As Exception
+            Util.WriteLogs(False, "EncryptBOS", "EncryptBOS error:" & inpString.ToString & " - " & ex.Message, Util.CreateLogFile(LogType.ERROR), True)
+            Return ""
+        End Try
+
+
+    End Function

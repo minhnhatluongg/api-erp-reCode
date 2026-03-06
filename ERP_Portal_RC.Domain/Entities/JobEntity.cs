@@ -10,6 +10,7 @@ namespace ERP_Portal_RC.Domain.Entities
         public string? EntryID { get; set; }
         public string? Descrip { get; set; }
         public string? SuplID { get; set; }
+        public string? CmpnID { get; set; } = "26";
         public string? FileLogo { get; set; }
         public string? FileInvoice { get; set; }
         public string? FileOther { get; set; }
@@ -40,6 +41,7 @@ namespace ERP_Portal_RC.Domain.Entities
         public string? FileName7 { get; set; }
         public string? FileName8 { get; set; }
         public string? FileName9 { get; set; }
+        public string? EmplID { get; set; }
         public IFormCollection? UploadedFiles { get; set; }
         public int ItemNo { get; set; }
         public DateTime? PublDate { get; set; }
@@ -65,5 +67,7 @@ namespace ERP_Portal_RC.Domain.Entities
         public int curSign { get; set; } //signNumr Zgn_EcontractJob
         public bool isDesignInvoices { get; set; }
         public int currSignNumb { get; set; }
+        public string? EntryName { get; set; }
+        public string? EmplName { get; set; }
     }
 }

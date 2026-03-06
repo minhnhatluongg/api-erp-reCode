@@ -1,6 +1,7 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -48,5 +49,15 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ApiResponse<object>> UnSignAsync(UnSignRequest model);
         // Lấy lịch sử Job của hợp đồng
         Task<ApiResponse<EContractHistoryResponse>> GetJobHistoryAsync(string oid);
-    }
+        //Check yêu cầu kiểm tra của kd/sale.
+        Task<List<JobEntity>> GetJobKTbyOID(string oid);
+        Task<ApiResponse<List<EContractDetails>>> GetEContractDetailsActionAsync(string oid);
+        Task<ApiResponse<EContractDetailsViewModel>> GetJobDetailsAsync(string oid, string kt = "0");
+        Task HandleAutomaticJobAsync(EContractDetailsViewModel model, EContractHistoryRaw2 raw, string oid, string kt);
+        Task<PagedResponse<DepartmentDTO>> GetDepartmentsPagedAsync(string operDeptList, int pageNumber, int pageSize);
+        Task<ApiResponse<List<EContractDetailDTO>>> VerifyJobDetailsAsync(string cusTax, string oid);
+        Task<ApiResponse<object>> UploadContractFilesAsync(IFormFileCollection files);
+        Task<ApiResponse<object>> SaveJobAsync(SaveJobRequestDto request, string userCode);
+        Task<ApiResponse<object>> ApproveJobNowAsync(ApproveJobRequestDto request, string userCode, string fullName);
+    } 
 }

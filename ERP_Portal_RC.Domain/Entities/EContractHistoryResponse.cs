@@ -9,6 +9,7 @@ namespace ERP_Portal_RC.Domain.Entities
     public class EContractHistoryResponse
     {
         public List<HistoryItemDTO> HistoryList { get; set; } = new();
+        public List<JobEntity> JobList { get; set; } = new List<JobEntity>();
     }
     public class HistoryItemDTO
     {

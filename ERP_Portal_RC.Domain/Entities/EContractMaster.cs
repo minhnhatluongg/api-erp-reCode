@@ -39,6 +39,7 @@ namespace ERP_Portal_RC.Domain.Entities
         public string CusPosition_BySign { get; set; }
         public string CusBankNumber { get; set; }
         public string CusBankAddress { get; set; }
+        public string SaleFullName { get; set; }
         public decimal PrdcAmnt { get; set; }
         public decimal VAT_Rate { get; set; }
         public decimal VAT_Amnt { get; set; }
@@ -71,5 +72,8 @@ namespace ERP_Portal_RC.Domain.Entities
         public string EcontracSys { get; set; }
         public string Ptk_PL { get; set; }
         public string isContractPaper { get; set; }
+        public int CurrSignNumb { get; set; }
+        public bool IsCheckXHD { get; set; }
+        public bool IsShowCheckXHD { get; set; }
     }
 }
