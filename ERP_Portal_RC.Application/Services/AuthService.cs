@@ -302,5 +302,12 @@ namespace ERP_Portal_RC.Application.Services
                 return 0;
             }
         }
+
+        public async Task<bool> IsCheckUserExistsAsync(string loginName)
+        {
+            if (string.IsNullOrWhiteSpace(loginName)) return false;
+            var result = await _customStore.CheckUserByLoginNameAsync(loginName);
+            return result.FirstOrDefault() == 1;
+        }
     }
 }

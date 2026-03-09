@@ -297,5 +297,31 @@ namespace ERP_Portal_RC.Controllers
                     "Lỗi server khi lấy thông tin user", 500));
             }
         }
+
+        [HttpGet("check-exists")]
+        public async Task<ActionResult<ApiResponse<bool>>> CheckExists([FromQuery] string loginName)
+        {
+            if (string.IsNullOrEmpty(loginName))
+            {
+                return BadRequest(ApiResponse<bool>.ErrorResponse("Login name không được để trống", 400));
+            }
+
+            try
+            {
+                bool isExist = await _authService.IsCheckUserExistsAsync(loginName);
+
+                string message = isExist
+                    ? $"Tài khoản '{loginName}' đã tồn tại trên hệ thống."
+                    : $"Tài khoản '{loginName}' chưa được sử dụng.";
+
+                return Ok(ApiResponse<bool>.SuccessResponse(isExist, message));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ApiResponse<bool>.ErrorResponse(
+                    $"Lỗi hệ thống khi kiểm tra tài khoản: {ex.Message}",
+                    500));
+            }
+        }
     }
 }

@@ -72,6 +72,5 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task UpdateJobChangeAsync(JobEntity job, int? countChange, string info);
         Task<string> GetByOIDJobChangeAsync(string OID);
         //Task<JobEntity> InsertJobChangeYCAsync(JobEntity job); Code later
-
     }
 }
