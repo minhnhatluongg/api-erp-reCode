@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace ERP_Portal_RC.Application.DTOs
@@ -10,6 +11,9 @@ namespace ERP_Portal_RC.Application.DTOs
     {
         public string? OID { get; set; }
         public string? CmpnName { get; set; }
+        public string? CmpnTax { get; set; }
+        public string? CmpnAddress { get; set; }
+        public DateTime? ODate { get; set; } = DateTime.Now;
         public string? CusName { get; set; }
         public string? CusTax { get; set; }
         public string? CusEmail { get; set; }
@@ -21,5 +25,9 @@ namespace ERP_Portal_RC.Application.DTOs
         public bool IsshowYCCS { get; set; }
         public bool IsCheckXHD { get; set; }
         public bool IsShowCheckXHD { get; set; }
+        public DateTime? Date_BusLicence { get; set; }
+        public string? RefeContractDate { get; set; }
+        public string? Date_BusLicenceFormat { get; set; }
+        public string RefeContractDateFormat { get; set; } = string.Empty;
     }
 }

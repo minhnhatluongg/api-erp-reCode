@@ -59,5 +59,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ApiResponse<object>> UploadContractFilesAsync(IFormFileCollection files);
         Task<ApiResponse<object>> SaveJobAsync(SaveJobRequestDto request, string userCode);
         Task<ApiResponse<object>> ApproveJobNowAsync(ApproveJobRequestDto request, string userCode, string fullName);
+        Task<EContractsViewModel> GetContractDetailForDisplayAsync(string oid, string userCode, string grpList, string firstClaimValue);
+        Task<bool> CheckIfSubmitted(string oid);
     } 
 }

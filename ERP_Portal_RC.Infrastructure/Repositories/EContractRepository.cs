@@ -4,6 +4,7 @@ using ERP_Portal_RC.Domain.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Security.Cryptography;
@@ -540,7 +541,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CmpnBankAddress", master.CmpnBankAddress);
             parameters.Add("@SignDate", DateTime.Now);
             parameters.Add("@TaxDepartment", master.TaxDepartment ?? "");
-            parameters.Add("@TinhThanhTitle", "");
+            //parameters.Add("@TinhThanhTitle", "");
             parameters.Add("@Descript_Cus", master.Descript_Cus ?? "");
 
             // Thông tin Khách hàng
@@ -561,6 +562,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CmpName_Sign", master.CmpName_Sign ?? "");
             parameters.Add("@isUsingAcc", 0);
             parameters.Add("@SignNumb", -1);
+            parameters.Add("@tokenOID", master.tokenOID); 
 
             // Thông tin Tiền tệ & Hệ thống
             parameters.Add("@PrdcAmnt", master.PrdcAmnt);
@@ -591,7 +593,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@Details", detailsTable.AsTableValuedParameter("dbo.EContractDetailType"));
 
             // Thực thi
-            await conn.ExecuteAsync("dbo.sp_EContract_InsertAll", parameters, commandType: CommandType.StoredProcedure);
+            await conn.ExecuteAsync("dbo.sp_EContract_InsertAll_new", parameters, commandType: CommandType.StoredProcedure);
             return master.OID;
         }
 
@@ -1293,7 +1295,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 approveParams.Add("@FactorID", "JOB_00001");
                 approveParams.Add("@OID", job.OID);
                 approveParams.Add("@ODate", DateTime.Now.ToString("yyyy/MM/dd"));
-                approveParams.Add("@CmpnID", job.CmpnID ?? "26");
+                approveParams.Add("@CmpnID", job.cmpnID ?? "26");
                 approveParams.Add("@Crt_User", job.Crt_User);
                 approveParams.Add("@DataTbl", string.Empty);
                 approveParams.Add("@SignTble", "zsgn_EContractJobs");
@@ -1398,6 +1400,30 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 if (trans.Connection != null) trans.Rollback();
                 throw new Exception($"Lỗi khi khởi tạo Job Change YC: {ex.Message}");
             }
+        }
+
+        public async Task<IEnumerable<WebContractDetailsExport>> getWebContractDetailsExport(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            var parameters = new DynamicParameters();
+            parameters.Add("@oid", oid);
+
+            return await conn.QueryAsync<WebContractDetailsExport>(
+                "getWebContractDetailsExport",
+                parameters,
+                commandType: CommandType.StoredProcedure);
+        }
+
+        public async Task<bool> CheckIfSubmitted(string oid)
+        {
+            using var connection = _dbConnectionFactory.GetConnection(BosOnline);
+            var parameters = new { oid = oid };
+
+            return await connection.ExecuteScalarAsync<bool>(
+                "sp_CheckJobStatus",
+                parameters,
+                commandType: CommandType.StoredProcedure
+            );
         }
     }
 }

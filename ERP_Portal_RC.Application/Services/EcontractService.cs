@@ -5,6 +5,7 @@ using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Enum;
 using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.IO.Compression;
@@ -25,12 +26,17 @@ namespace ERP_Portal_RC.Application.Services
         private readonly IEContractRepository _eContractRepository;
         private readonly IMailService _mailService;
         private readonly IFileStorageService _fileStorageService;
+        private readonly FileConfig _fileConfig;
 
-        public EcontractService(IEContractRepository econtractRepo, IMailService mailService, IFileStorageService fileStorageService)
+        public EcontractService(IEContractRepository econtractRepo, 
+            IMailService mailService, 
+            IFileStorageService fileStorageService,
+            IOptions<FileConfig> fileConfigOptions)
         {
             _eContractRepository = econtractRepo;
             _mailService = mailService;
             _fileStorageService = fileStorageService;
+            _fileConfig = fileConfigOptions.Value;
         }
         public async Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string groupList, string userCode)
         {
@@ -1241,6 +1247,94 @@ namespace ERP_Portal_RC.Application.Services
             {
                 return ApiResponse<object>.ErrorResponse($"Lỗi hệ thống khi thực thi duyệt: {ex.Message}");
             }
+        }
+
+        public async Task<EContractsViewModel> GetContractDetailForDisplayAsync(string oid, string userCode, string grpList, string firstClaimValue)
+        {
+            var resultRaw = await _eContractRepository.GetEContractRawDataAsync(oid);
+            if (resultRaw == null)
+            {
+                return null;
+            }
+            var result = new EContractsViewModel
+            {
+                EContracts = new EContractDTO
+                {
+                    OID = resultRaw.EContract.OID,
+                    CusName = resultRaw.EContract.CusName,
+                    CmpnTax = resultRaw.EContract.CmpnTax,
+                    CmpnAddress = resultRaw.EContract.CmpnAddress,
+                    ODate = resultRaw.EContract.ODate,
+                    CurrSignNumb = resultRaw.EContract.CurrSignNumb,
+                    IsTT78 = resultRaw.EContract.IsTT78,
+                    Date_BusLicence = DateTime.TryParse(resultRaw.EContract.Date_BusLicence, out var date) ? date : null,
+                    RefeContractDate = resultRaw.EContract.RefeContractDate
+                },
+
+                JobDetail = resultRaw.Jobs.Select(j => new JobDetailDTO
+                {
+                    OID = j.OID,
+                    EntryID = j.EntryID,
+                    FactorID = j.FactorID,
+                    InvcSign = j.InvcSign,
+                    InvcFrm = (int)j.InvcFrm, 
+                    InvcEnd = (int)j.InvcEnd
+                }).ToList(),
+
+                JobPost = resultRaw.JobPosts, 
+                EContractDetails = resultRaw.EContractDetails,
+
+                Vendor = new VendorDTO
+                {
+                    VName = resultRaw.Vendor?.vName,
+                    TaxCode = resultRaw.Vendor?.TaxCode
+                },
+
+                TemplateEcontract = resultRaw.TemplateEcontract,
+                ECtr_PublicInfo = resultRaw.ECtr_PublicInfo,
+                EmailUser = resultRaw.EmailUser
+            };
+
+            if (result.EContracts != null)
+            {
+                if (result.EContracts.IsTT78 && result.JobPost != null)
+                {
+                    result.ycTK = result.JobPost.Any(s => s.FactorID == "JOB_00003" && s.EntryID == "JB:003");
+                    result.ycTM = result.JobPost.Any(s => s.FactorID == "JOB_00001" && s.EntryID == "JB:001");
+                    result.ycDaTM = result.JobPost.Any(s => s.FactorID == "JOB_00001" && s.EntryID == "JB:001" && s.SignNumb == "301");
+                    result.ycPH = result.JobPost.Any(s => s.FactorID == "JOB_00002" && s.EntryID == "JB:004");
+                    result.ycDaTK = result.JobPost.Any(s => s.FactorID == "JOB_00003" && s.EntryID == "JB:003" && s.SignNumb == "201");
+                }
+                result.EContracts.Date_BusLicenceFormat = result.EContracts.Date_BusLicence?.ToString("dd/MM/yyyy").Replace("-", "/");
+                if (result.EContracts.Date_BusLicenceFormat == "01/01/0001") result.EContracts.Date_BusLicenceFormat = "25/12/2021";
+
+                var urlsign = $"contract;b;{result.EContracts.CmpnTax};{firstClaimValue};{result.EContracts.OID};125.212.205.139;bos;nghe!v@ng2011";
+                result.UrlRequest = Sha1.Encrypt(urlsign);
+            }
+
+            if (resultRaw.ListFiles != null)
+            {
+                result.ListFiles = resultRaw.ListFiles.Select(f => new ERP_Portal_RC.Application.DTOs.ListFile
+                {
+                    AttachFile = f.AttachFile,
+                    Crt_User = f.Crt_User,
+                    LinkFonder = f.LinkFonder,
+                    isdisable = (f.Crt_User != userCode),
+                    url = string.IsNullOrEmpty(f.LinkFonder)
+                        ? $"{_fileConfig.FileUpload}{f.AttachFile}"
+                        : $"{_fileConfig.FileUpload}{f.LinkFonder}/{f.AttachFile}"
+                }).ToList();
+            }
+
+            var groups = grpList.Replace("'", "").Replace("[", "").Replace("]", "").Split(',');
+            result.IsshowReturnSign = groups.Any(g => g == "000.000.2102821152" || g == "00006.00063.00121");
+
+            return result;
+        }
+
+        public async Task<bool> CheckIfSubmitted(string oid)
+        {
+            return await _eContractRepository.CheckIfSubmitted(oid);
         }
     }
 }

@@ -10,7 +10,7 @@ namespace ERP_Portal_RC.Domain.Entities
         public string? EntryID { get; set; }
         public string? Descrip { get; set; }
         public string? SuplID { get; set; }
-        public string? CmpnID { get; set; } = "26";
+        public string? cmpnID { get; set; } = "26";
         public string? FileLogo { get; set; }
         public string? FileInvoice { get; set; }
         public string? FileOther { get; set; }
@@ -23,7 +23,6 @@ namespace ERP_Portal_RC.Domain.Entities
         public string? invcSample { get; set; }
         public DateTime crt_date { get; set; }
         public DateTime SignDate { get; set; }
-        public string? cmpnID { get; set; }
         public string? FactorIDAtt { get; set; }
         public string? FileName { get; set; }
         public string? AttachType { get; set; }
