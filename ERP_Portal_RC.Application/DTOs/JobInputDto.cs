@@ -9,7 +9,7 @@ namespace ERP_Portal_RC.Application.DTOs
     public class JobInputDto
     {
         public string FactorID { get; set; } = "JOB_00001"; 
-        public string EntryID { get; set; }     
+        public string? EntryID { get; set; }     
         public string? TemplateID { get; set; } 
         public string? OperDept { get; set; }   
         public bool IsDesignInvoices { get; set; } 

@@ -3,9 +3,7 @@ using System.Text;
 
 namespace ERP_Portal_RC.Domain.Common
 {
-    /// <summary>
     /// SHA1/DES Encryption và Decryption utility
-    /// </summary>
     public static class Sha1
     {
         private static readonly byte[] _key = Encoding.ASCII.GetBytes("Nghe!Con");

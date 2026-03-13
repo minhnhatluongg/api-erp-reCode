@@ -38,7 +38,8 @@ builder.Services.AddAutoMapper(new[] {
     typeof(MenuMappingProfile).Assembly,
     typeof(TechnicalMappingProfile).Assembly
 });
-
+// Đăng ký cấu hình FileConfig
+builder.Services.Configure<FileConfig>(builder.Configuration.GetSection("FileConfig"));
 // Đăng ký Application Services
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.AddScoped<IMailService, MailService>();
@@ -195,7 +196,8 @@ else
 app.UseHttpsRedirection();
 
 app.UseCors("AllowAll");
-
+//Enable Files
+app.UseStaticFiles();
 // Enable Session
 app.UseSession();
 

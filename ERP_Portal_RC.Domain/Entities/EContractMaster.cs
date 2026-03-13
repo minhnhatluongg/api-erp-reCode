@@ -75,5 +75,6 @@ namespace ERP_Portal_RC.Domain.Entities
         public int CurrSignNumb { get; set; }
         public bool IsCheckXHD { get; set; }
         public bool IsShowCheckXHD { get; set; }
+        public string? tokenOID { get; set; }
     }
 }

@@ -490,6 +490,41 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.ApproveJobNowAsync(request, userCode, fullName);
             return Ok(result);
         }
+
+        [HttpGet("get")]
+        public async Task<IActionResult> Get([FromQuery] string oid)
+        {
+            if (string.IsNullOrEmpty(oid))
+            {
+                return Ok(ApiResponse<object>.ErrorResponse("Vui lòng cung cấp mã OID hợp đồng."));
+            }
+
+            try
+            {
+                var userCode = User.FindFirst("UserCode")?.Value ?? "";
+                var grpList = User.FindFirst("GrpList")?.Value ?? "";
+                var firstClaim = User.Claims.FirstOrDefault()?.Value ?? "";
+                var result = await _econtractService.GetContractDetailForDisplayAsync(oid, userCode, grpList, firstClaim);
+
+                if (result == null)
+                {
+                    return Ok(ApiResponse<object>.ErrorResponse("Không tìm thấy dữ liệu hợp đồng hoặc lỗi truy vấn."));
+                }
+
+                return Ok(ApiResponse<EContractsViewModel>.SuccessResponse(result, "Lấy chi tiết hợp đồng thành công."));
+            }
+            catch (Exception ex)
+            {
+                return Ok(ApiResponse<object>.ErrorResponse($"Lỗi hệ thống: {ex.Message}"));
+            }
+        }
+        [HttpGet("check-submitted/{oid}")]
+        public async Task<IActionResult> CheckStatus(string oid)
+        {
+            string cleanedOid = System.Net.WebUtility.UrlDecode(oid).Trim();
+            var isSubmitted = await _econtractService.CheckIfSubmitted(cleanedOid);
+            return Ok(new { OID = cleanedOid, IsSubmitted = isSubmitted });
+        }
     }
 }
 
