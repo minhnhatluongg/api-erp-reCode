@@ -6,6 +6,7 @@ using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
 using System.Security.Claims;
 using System.Transactions;
 using System.Web;
@@ -18,9 +19,11 @@ namespace API.ERP_Portal_RC.Controllers
     public class EcontractController : Controller
     {
         private readonly IEcontractService _econtractService;
-        public EcontractController(IEcontractService econtractService)
+        private readonly IConfiguration _configuration;
+        public EcontractController(IEcontractService econtractService, IConfiguration configuration)
         {
             _econtractService = econtractService;
+            _configuration = configuration;
         }
 
         [HttpGet("countContract")]
@@ -453,17 +456,54 @@ namespace API.ERP_Portal_RC.Controllers
             return Ok(response);
         }
         [HttpPost("upload-files")]
-        [DisableRequestSizeLimit] 
-        public async Task<IActionResult> UploadFiles(IFormFileCollection files)
+        [DisableRequestSizeLimit]
+        public async Task<IActionResult> UploadFiles(IFormFileCollection files, [FromQuery] string oid)
         {
+            if (string.IsNullOrEmpty(oid))
+                return BadRequest(ApiResponse<object>.ErrorResponse("Thiếu OID của hợp đồng."));
+
             if (files == null || files.Count == 0)
             {
                 return BadRequest(ApiResponse<object>.ErrorResponse("Không có file nào được chọn."));
             }
-            var response = await _econtractService.UploadContractFilesAsync(files);
-
+            var response = await _econtractService.UploadContractFilesAsync(files, oid);
             return Ok(response);
         }
+        [HttpGet("list/{oid}")]
+        public async Task<IActionResult> GetListFiles(string oid)
+        {
+            var response = await _econtractService.GetListFilesByOidAsync(oid);
+            return Ok(response);
+        }
+        [HttpGet("download/{oid}/{fileName}")]
+        public IActionResult DownloadFile(string oid, string fileName)
+        {
+            try
+            {
+                string uploadRoot = _configuration["ApiSettings:UploadPath"] ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\Uploads";
+
+                string folderName = oid.Replace("/", "").Replace(":", "");
+                string filePath = Path.Combine(uploadRoot, folderName, fileName);
+
+                if (!System.IO.File.Exists(filePath))
+                    return NotFound("File không tồn tại trên hệ thống.");
+
+                var provider = new FileExtensionContentTypeProvider();
+                if (!provider.TryGetContentType(filePath, out var contentType))
+                {
+                    contentType = "application/octet-stream";
+                }
+
+                var fileBytes = System.IO.File.ReadAllBytes(filePath);
+
+                return File(fileBytes, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Lỗi hệ thống: {ex.Message}");
+            }
+        }
+
         [HttpPost("save-job")]
         public async Task<IActionResult> SaveJob([FromBody] SaveJobRequestDto request)
         {
@@ -524,6 +564,14 @@ namespace API.ERP_Portal_RC.Controllers
             string cleanedOid = System.Net.WebUtility.UrlDecode(oid).Trim();
             var isSubmitted = await _econtractService.CheckIfSubmitted(cleanedOid);
             return Ok(new { OID = cleanedOid, IsSubmitted = isSubmitted });
+        }
+
+        [HttpGet("next-job-oid/{mainOid}")]
+        public async Task<IActionResult> GetNextOid(string mainOid)
+        {
+            string decodedOid = System.Net.WebUtility.UrlDecode(mainOid);
+            var response = await _econtractService.GetNextJobOIDAsync(decodedOid);
+            return Ok(response);
         }
     }
 }

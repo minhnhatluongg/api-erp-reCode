@@ -1425,5 +1425,28 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 commandType: CommandType.StoredProcedure
             );
         }
+
+        public async Task<IEnumerable<object>> GetDocAttachFilesAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosDocument);
+            const string sql = @"SELECT AttachFile as FileName, 
+                                DocSourceDateField as ViewUrl, 
+                                AttachNote as Note 
+                         FROM [BosDocument].[dbo].[DocAttachfile] 
+                         WHERE OID = @OID OR LinkFonder = @LinkFonder";
+
+            var folder = oid.Replace("/", "").Replace(":", "");
+            return await conn.QueryAsync<object>(sql, new { OID = oid, LinkFonder = folder });
+        }
+
+        public async Task<string> GetNextJobOIDAsync(string mainOid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            return await conn.QueryFirstOrDefaultAsync<string>(
+                "dbo.sp_EContract_GetNextJobOID",
+                new { MainOID = mainOid },
+                commandType: CommandType.StoredProcedure
+            );
+        }
     }
 }
