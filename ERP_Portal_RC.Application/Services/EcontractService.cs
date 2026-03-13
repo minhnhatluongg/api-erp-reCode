@@ -5,6 +5,7 @@ using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Enum;
 using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -27,15 +28,18 @@ namespace ERP_Portal_RC.Application.Services
         private readonly IMailService _mailService;
         private readonly IFileStorageService _fileStorageService;
         private readonly FileConfig _fileConfig;
+        private readonly IConfiguration _configuration;
 
         public EcontractService(IEContractRepository econtractRepo, 
             IMailService mailService, 
             IFileStorageService fileStorageService,
+            IConfiguration configuration,
             IOptions<FileConfig> fileConfigOptions)
         {
             _eContractRepository = econtractRepo;
             _mailService = mailService;
             _fileStorageService = fileStorageService;
+            _configuration = configuration;
             _fileConfig = fileConfigOptions.Value;
         }
         public async Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string groupList, string userCode)
@@ -1066,23 +1070,30 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
-        public async Task<ApiResponse<object>> UploadContractFilesAsync(IFormFileCollection files)
+        public async Task<ApiResponse<object>> UploadContractFilesAsync(IFormFileCollection files, string oid)
         {
-            var uploadedPaths = new List<string>();
-            long totalSize = files.Sum(f => f.Length);
+            var fileInfos = new List<object>();
+            // Base URL của bạn, ví dụ: https://api-erprc.win-tech.vn
+            string baseUrl = _configuration["FileConfig:UrlMain"] ?? "UrlMain";
 
             foreach (var file in files)
             {
-                string path = await _fileStorageService.UploadFileAsync(file, file.Name);
-                if (path != null) uploadedPaths.Add(path);
-            }
+                string fileName = await _fileStorageService.UploadFileAsync(file, file.Name);
 
-            return ApiResponse<object>.SuccessResponse(new
-            {
-                FileCount = uploadedPaths.Count,
-                TotalSize = totalSize,
-                Paths = uploadedPaths
-            }, "Upload file thành công.");
+                if (fileName != null)
+                {
+                    string viewUrl = $"{baseUrl}/api/files/view/{oid}/{fileName}";
+                    string downloadUrl = $"{baseUrl}/api/files/download/{oid}/{fileName}";
+
+                    fileInfos.Add(new
+                    {
+                        FileName = fileName,
+                        ViewUrl = viewUrl,
+                        DownloadUrl = downloadUrl
+                    });
+                }
+            }
+            return ApiResponse<object>.SuccessResponse(fileInfos, "Upload file thành công.");
         }
 
         public async Task<ApiResponse<object>> SaveJobAsync(SaveJobRequestDto request, string userCode)
@@ -1116,7 +1127,7 @@ namespace ERP_Portal_RC.Application.Services
                 }
                 sumInvc += item.InvcEnd;
             }
-
+            var firstPack = request.Packs?.FirstOrDefault();
             try
             {
                 var jobEntity = new JobEntity
@@ -1133,13 +1144,18 @@ namespace ERP_Portal_RC.Application.Services
                     FileName1 = request.Job.FileName1,
                     ChangeOption = request.Job.ChangeOption,
                     DescriptChange = request.Job.DescriptChange,
-                    Crt_User = userCode 
+                    Crt_User = userCode,
+
+                    InvcSign = firstPack?.InvcSign ?? string.Empty,
+                    InvcFrm = firstPack?.InvcFrm ?? 0,
+                    invcSample = firstPack?.InvcSample ?? string.Empty,
+                    PackID = firstPack?.ItemID ?? string.Empty, 
                 };
 
                 var jobPackEntities = request.Packs.Select(p => new JobPackEntity
                 {
                     ItemID = p.ItemID,
-                    ItemNo = p.ItemNo, //
+                    ItemNo = p.ItemNo,
                     InvcSign = p.InvcSign,
                     invcSample = p.InvcSample,
                     InvcFrm = p.InvcFrm,
@@ -1335,6 +1351,30 @@ namespace ERP_Portal_RC.Application.Services
         public async Task<bool> CheckIfSubmitted(string oid)
         {
             return await _eContractRepository.CheckIfSubmitted(oid);
+        }
+
+        public async Task<ApiResponse<IEnumerable<object>>> GetListFilesByOidAsync(string oid)
+        {
+            string cleanedOid = System.Net.WebUtility.UrlDecode(oid).Trim();
+
+            var files = await _eContractRepository.GetDocAttachFilesAsync(cleanedOid);
+
+            if (files == null || !files.Any())
+            {
+                return ApiResponse<IEnumerable<object>>.ErrorResponse("Không tìm thấy file đính kèm nào.");
+            }
+
+            return ApiResponse<IEnumerable<object>>.SuccessResponse(files, "Lấy danh sách file thành công.");
+        }
+
+        public async Task<ApiResponse<string>> GetNextJobOIDAsync(string mainOid)
+        {
+            if (string.IsNullOrEmpty(mainOid))
+                return ApiResponse<string>.ErrorResponse("OID gốc không được để trống.");
+
+            var nextOid = await _eContractRepository.GetNextJobOIDAsync(mainOid);
+
+            return ApiResponse<string>.SuccessResponse(nextOid, "Lấy OID tiếp theo thành công.");
         }
     }
 }

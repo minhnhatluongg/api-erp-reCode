@@ -74,5 +74,7 @@ namespace ERP_Portal_RC.Domain.Interfaces
         //Task<JobEntity> InsertJobChangeYCAsync(JobEntity job); Code later
         Task<IEnumerable<WebContractDetailsExport>> getWebContractDetailsExport(string oid);
         Task<bool> CheckIfSubmitted(string oid);
+        Task<IEnumerable<object>> GetDocAttachFilesAsync(string oid);
+        Task<string> GetNextJobOIDAsync(string mainOid);
     }
 }
