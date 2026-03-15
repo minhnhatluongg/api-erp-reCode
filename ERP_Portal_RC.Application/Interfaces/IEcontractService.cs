@@ -63,5 +63,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<bool> CheckIfSubmitted(string oid);
         Task<ApiResponse<IEnumerable<object>>> GetListFilesByOidAsync(string oid);
         Task<ApiResponse<string>> GetNextJobOIDAsync(string mainOid);
+        Task<ApiResponse<string>> CreateJobAsync(InsertJobRequest request);
+        Task<ApiResponse<JobStatusResponse>> GetJobStatusAsync(string referenceId, string factorId, string entryId);
     } 
 }

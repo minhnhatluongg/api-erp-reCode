@@ -1,4 +1,5 @@
-﻿using ERP_Portal_RC.Application.DTOs;
+﻿using Dapper;
+using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Common;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
+using System.Data;
 using System.Security.Claims;
 using System.Transactions;
 using System.Web;
@@ -572,6 +574,32 @@ namespace API.ERP_Portal_RC.Controllers
             string decodedOid = System.Net.WebUtility.UrlDecode(mainOid);
             var response = await _econtractService.GetNextJobOIDAsync(decodedOid);
             return Ok(response);
+        }
+
+        [HttpPost("create-job")]
+        public async Task<IActionResult> CreateJob([FromBody] InsertJobRequest request)
+        {
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userCode))
+            {
+                return Unauthorized(ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin định danh người dùng", 401));
+            }
+            request.Crt_User = userCode;
+            if (!ModelState.IsValid)
+                return BadRequest(ApiResponse<object>.ErrorResponse("Dữ liệu đầu vào không hợp lệ", 400));
+
+            var result = await _econtractService.CreateJobAsync(request);
+            return StatusCode(result.StatusCode, result);
+        }
+
+        [HttpGet("check-status-job")]
+        public async Task<IActionResult> CheckStatus(
+            [FromQuery] string referenceId,
+            [FromQuery] string factorId,
+            [FromQuery] string entryId)
+        {
+            var result = await _econtractService.GetJobStatusAsync(referenceId, factorId, entryId);
+            return StatusCode(result.StatusCode, result);
         }
     }
 }

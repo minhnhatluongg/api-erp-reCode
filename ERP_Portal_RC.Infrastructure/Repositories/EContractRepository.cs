@@ -1448,5 +1448,46 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 commandType: CommandType.StoredProcedure
             );
         }
+
+        public async Task<string> InsertJobFullAsync(InsertJobRequest request)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@ReferenceID", request.ReferenceID);
+            parameters.Add("@EntryID", request.EntryID);
+            parameters.Add("@FactorID", request.FactorID);
+            parameters.Add("@CmpnID", request.CmpnID ?? "26");
+            parameters.Add("@OperDept", request.OperDept);
+            parameters.Add("@Crt_User", request.Crt_User);
+            parameters.Add("@CusTax", request.CusTax);
+            parameters.Add("@CusName", request.CusName);
+            parameters.Add("@EntryName", request.EntryName);
+            parameters.Add("@ItemID", request.ItemID);
+            parameters.Add("@InvcSign", request.InvcSign);
+            parameters.Add("@InvcFrm", request.InvcFrm);
+            parameters.Add("@InvcEnd", request.InvcEnd);
+            parameters.Add("@ReferenceDate", request.ReferenceDate);
+            parameters.Add("@ReferenceInfo", request.ReferenceInfo);
+            parameters.Add("@InvcSample", request.InvcSample);
+            parameters.Add("@FileInvoice", request.FileInvoice ?? "");
+            parameters.Add("@FileOther", request.FileOther ?? "");
+
+            return await conn.QueryFirstOrDefaultAsync<string>(
+                "sp_EContract_InsertJob_Full_v2",
+                parameters,
+                commandType: CommandType.StoredProcedure
+            );
+        }
+
+        public async Task<JobStatusResponse> CheckJobStatusAsync(string referenceId, string factorId, string entryId)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            return await conn.QueryFirstOrDefaultAsync<JobStatusResponse>(
+                "sp_EContract_CheckJobStatus",
+                new { ReferenceID = referenceId, FactorID = factorId, EntryID = entryId },
+                commandType: CommandType.StoredProcedure
+            );
+        }
     }
 }

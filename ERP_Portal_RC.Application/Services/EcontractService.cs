@@ -1371,10 +1371,48 @@ namespace ERP_Portal_RC.Application.Services
         {
             if (string.IsNullOrEmpty(mainOid))
                 return ApiResponse<string>.ErrorResponse("OID gốc không được để trống.");
+            try
+            {
+                var nextOid = await _eContractRepository.GetNextJobOIDAsync(mainOid);
+                return ApiResponse<string>.SuccessResponse(nextOid, "Lấy OID tiếp theo thành công.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<string>.ErrorResponse($"Lỗi khi lấy OID: {ex.Message}", 500);
+            }
+        }
 
-            var nextOid = await _eContractRepository.GetNextJobOIDAsync(mainOid);
+        public async Task<ApiResponse<string>> CreateJobAsync(InsertJobRequest request)
+        {
+            try
+            {
+                var newId = await _eContractRepository.InsertJobFullAsync(request);
 
-            return ApiResponse<string>.SuccessResponse(nextOid, "Lấy OID tiếp theo thành công.");
+                if (string.IsNullOrEmpty(newId))
+                    return ApiResponse<string>.ErrorResponse("Không thể tạo Job mới", 400);
+
+                return ApiResponse<string>.SuccessResponse(newId, "Tạo Job thành công");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<string>.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 500);
+            }
+        }
+
+        public async Task<ApiResponse<JobStatusResponse>> GetJobStatusAsync(string referenceId, string factorId, string entryId)
+        {
+            try
+            {
+                var status = await _eContractRepository.CheckJobStatusAsync(referenceId, factorId, entryId);
+                if (status == null)
+                    return ApiResponse<JobStatusResponse>.SuccessResponse(null, "Chưa từng tồn tại yêu cầu này");
+
+                return ApiResponse<JobStatusResponse>.SuccessResponse(status, "Lấy trạng thái thành công");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<JobStatusResponse>.ErrorResponse(ex.Message, 500);
+            }
         }
     }
 }

@@ -76,5 +76,7 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<bool> CheckIfSubmitted(string oid);
         Task<IEnumerable<object>> GetDocAttachFilesAsync(string oid);
         Task<string> GetNextJobOIDAsync(string mainOid);
+        Task<string> InsertJobFullAsync(InsertJobRequest request);
+        Task<JobStatusResponse> CheckJobStatusAsync(string referenceId, string factorId, string entryId);
     }
 }

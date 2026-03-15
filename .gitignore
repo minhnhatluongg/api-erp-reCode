@@ -1,0 +1,15 @@
+## Chặn file cấu hình chứa thông tin nhạy cảm
+ERP_Portal_RC/appsettings.json
+ERP_Portal_RC/appsettings.Development.json
+
+## Chặn các file rác của Visual Studio & Build
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Chặn các file log
+*.log

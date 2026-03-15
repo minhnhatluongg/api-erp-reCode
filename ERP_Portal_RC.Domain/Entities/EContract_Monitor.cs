@@ -63,6 +63,7 @@
         public string? XHD { get; set; }
         public bool isTT78 { get; set; } = false;
         public bool isTool { get; set; } = false;
-        public bool isGiaHan { get; set; } = false;
+        public bool isGiaHan { get; set; }
+        public bool isCapBu { get; set; }
     }
 }
