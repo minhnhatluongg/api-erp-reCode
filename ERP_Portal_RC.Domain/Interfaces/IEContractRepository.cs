@@ -78,5 +78,11 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<string> GetNextJobOIDAsync(string mainOid);
         Task<string> InsertJobFullAsync(InsertJobRequest request);
         Task<JobStatusResponse> CheckJobStatusAsync(string referenceId, string factorId, string entryId);
+
+        //Lấy danh sách file (Dùng cho cả Job & Hợp đồng)
+        Task<IEnumerable<object>> GetAttachmentsByOidAsync(string oid);
+        Task<int> AddAttachmentsAsync(string oid, string factorId, string entryId, string user, string jsonAttachments);
+        Task<IEnumerable<dynamic>> GetRawAttachmentsByOidAsync(string oid);
+
     }
 }

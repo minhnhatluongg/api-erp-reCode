@@ -65,5 +65,8 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ApiResponse<string>> GetNextJobOIDAsync(string mainOid);
         Task<ApiResponse<string>> CreateJobAsync(InsertJobRequest request);
         Task<ApiResponse<JobStatusResponse>> GetJobStatusAsync(string referenceId, string factorId, string entryId);
+
+        Task<ApiResponse<object>> AddMoreFilesAsync(string oid, string factorId, string entryId, List<AttachmentItem> newFiles, string user);
+        Task<ApiResponse<IEnumerable<object>>> GetAttachmentsByOidAsync(string oid);
     } 
 }

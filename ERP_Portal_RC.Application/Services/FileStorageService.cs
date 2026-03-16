@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -12,35 +13,42 @@ namespace ERP_Portal_RC.Domain.Interfaces
     public class FileStorageService : IFileStorageService
     {
         private readonly IWebHostEnvironment _env;
-        public FileStorageService(IWebHostEnvironment env)
+        private readonly IConfiguration _configuration;
+        public FileStorageService(IWebHostEnvironment env, IConfiguration configuration)
         {
             _env = env;
+            _configuration = configuration;
         }
 
         public async Task<string> UploadFileAsync(IFormFile file, string subFolder)
         {
             if (file == null || file.Length == 0) return null;
 
-            // 1. Chuẩn hóa tên thư mục (Xóa ký tự đặc biệt như logic cũ)
-            string folderName = subFolder.Replace("/", "").Replace(":", "").Trim();
-            string uploadRoot = Path.Combine(_env.ContentRootPath, "Uploads", "Upload", folderName);
+            string uploadRoot = _configuration["FileConfig:PhysicalRootPath"];
 
-            if (!Directory.Exists(uploadRoot))
+            string year = DateTime.Now.Year.ToString();
+            string month = DateTime.Now.Month.ToString("00");
+
+            string cleanSubFolder = subFolder.Replace("/", "_").Replace(":", "_").Trim();
+
+            string relativePath = Path.Combine(year, month, cleanSubFolder);
+
+            string physicalPath = Path.Combine(uploadRoot, relativePath);
+
+            if (!Directory.Exists(physicalPath))
             {
-                Directory.CreateDirectory(uploadRoot);
+                Directory.CreateDirectory(physicalPath);
             }
 
-            // 2. Xử lý tên file (Tiếng Việt không dấu)
-            string fileName = RemoveDiacritics(file.FileName);
-            string fullPath = Path.Combine(uploadRoot, fileName);
+            string fileName = $"{Guid.NewGuid()}_{RemoveDiacritics(file.FileName)}";
+            string fullPhysicalPath = Path.Combine(physicalPath, fileName);
 
-            // 3. Lưu file
-            using (var stream = new FileStream(fullPath, FileMode.Create))
+            using (var stream = new FileStream(fullPhysicalPath, FileMode.Create))
             {
                 await file.CopyToAsync(stream);
             }
 
-            return fullPath;
+            return Path.Combine(relativePath, fileName).Replace("\\", "/");
         }
         private string RemoveDiacritics(string text)
         {

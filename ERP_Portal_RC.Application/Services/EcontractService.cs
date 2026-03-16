@@ -7,6 +7,7 @@ using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO.Compression;
@@ -1072,27 +1073,23 @@ namespace ERP_Portal_RC.Application.Services
 
         public async Task<ApiResponse<object>> UploadContractFilesAsync(IFormFileCollection files, string oid)
         {
-            var fileInfos = new List<object>();
-            // Base URL của bạn, ví dụ: https://api-erprc.win-tech.vn
-            string baseUrl = _configuration["FileConfig:UrlMain"] ?? "UrlMain";
+            var fileInfos = new List<AttachmentItem>(); // Dùng class AttachmentItem đã định nghĩa
+            string baseUrl = _configuration["FileConfig:BaseUrl"];
 
             foreach (var file in files)
             {
-                string fileName = await _fileStorageService.UploadFileAsync(file, file.Name);
+                string relativePath = await _fileStorageService.UploadFileAsync(file, oid);
 
-                if (fileName != null)
+                if (relativePath != null)
                 {
-                    string viewUrl = $"{baseUrl}/api/files/view/{oid}/{fileName}";
-                    string downloadUrl = $"{baseUrl}/api/files/download/{oid}/{fileName}";
-
-                    fileInfos.Add(new
+                    fileInfos.Add(new AttachmentItem
                     {
-                        FileName = fileName,
-                        ViewUrl = viewUrl,
-                        DownloadUrl = downloadUrl
+                        FileName = file.FileName,
+                        RelativePath = relativePath
                     });
                 }
             }
+            // Trả về List object để FE có dữ liệu gọi tiếp API lưu Job/AddMore
             return ApiResponse<object>.SuccessResponse(fileInfos, "Upload file thành công.");
         }
 
@@ -1413,6 +1410,32 @@ namespace ERP_Portal_RC.Application.Services
             {
                 return ApiResponse<JobStatusResponse>.ErrorResponse(ex.Message, 500);
             }
+        }
+
+        public async Task<ApiResponse<object>> AddMoreFilesAsync(string oid, string factorId, string entryId, List<AttachmentItem> newFiles, string user)
+        {
+            string jsonAttachments = JsonConvert.SerializeObject(newFiles);
+
+            var result = await _eContractRepository.AddAttachmentsAsync(oid, factorId, entryId, user, jsonAttachments);
+
+            if (result > 0)
+                return ApiResponse<object>.SuccessResponse(null, "Đính kèm thêm file thành công.");
+
+            return ApiResponse<object>.ErrorResponse("Không có dữ liệu nào được cập nhật.");
+        }
+
+        public async Task<ApiResponse<IEnumerable<object>>> GetAttachmentsByOidAsync(string oid)
+        {
+            var rawFiles = await _eContractRepository.GetRawAttachmentsByOidAsync(oid);
+            var baseUrl = _configuration["FileConfig:BaseUrl"];
+            var formattedFiles = rawFiles.Select(f => new {
+                AttachID = f.AttachID,
+                FileName = f.AttachFile,
+                Note = f.AttachNote,
+                AttachDate = f.AttachDate,
+                ViewUrl = $"{baseUrl}/{f.LinkFile}" 
+            });
+            return ApiResponse<IEnumerable<object>>.SuccessResponse(formattedFiles, "Lấy danh sách file thành công.");
         }
     }
 }
