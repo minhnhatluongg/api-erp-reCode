@@ -1,6 +1,8 @@
 ﻿using Dapper;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -21,15 +23,17 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
     {
         private readonly IDbConnectionFactory _dbConnectionFactory;
         private readonly IDSignaturesRepository _dSign;
+        private readonly IConfiguration _configuration;
         private const string BosOnline = "BosOnline";
         private const string BosApproval = "BosApproval";
         private const string BosControlEVAT = "BosControlEVAT";
         private const string BosDocument = "BosDocument";
         private const string BosCataloge = "BosCataloge";
-        public EContractRepository(IDbConnectionFactory dbConnectionFactory, IDSignaturesRepository dSign)
+        public EContractRepository(IDbConnectionFactory dbConnectionFactory, IDSignaturesRepository dSign, IConfiguration configuration)
         {
             _dbConnectionFactory = dbConnectionFactory;
             _dSign = dSign;
+            _configuration = configuration;
         }
 
         public async Task<ListEcontractViewModel> CountList(string crtUser, string dateStart, string dateEnd)
@@ -1430,13 +1434,19 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         {
             using var conn = _dbConnectionFactory.GetConnection(BosDocument);
             const string sql = @"SELECT AttachFile as FileName, 
-                                DocSourceDateField as ViewUrl, 
+                                LinkFile as RelativePath, 
                                 AttachNote as Note 
                          FROM [BosDocument].[dbo].[DocAttachfile] 
-                         WHERE OID = @OID OR LinkFonder = @LinkFonder";
+                         WHERE OID = @OID";
 
-            var folder = oid.Replace("/", "").Replace(":", "");
-            return await conn.QueryAsync<object>(sql, new { OID = oid, LinkFonder = folder });
+            var files = await conn.QueryAsync<dynamic>(sql, new { OID = oid });
+
+            var baseUrl = _configuration["FileConfig:BaseUrl"]; // https://api-erprc.win-tech.vn/uploads
+            return files.Select(f => new {
+                f.FileName,
+                f.Note,
+                ViewUrl = $"{baseUrl}/{f.RelativePath}"
+            });
         }
 
         public async Task<string> GetNextJobOIDAsync(string mainOid)
@@ -1452,6 +1462,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         public async Task<string> InsertJobFullAsync(InsertJobRequest request)
         {
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            string jsonForSql = request.Attachments != null
+                ? JsonConvert.SerializeObject(request.Attachments) : "[]";
 
             var parameters = new DynamicParameters();
             parameters.Add("@ReferenceID", request.ReferenceID);
@@ -1472,6 +1484,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@InvcSample", request.InvcSample);
             parameters.Add("@FileInvoice", request.FileInvoice ?? "");
             parameters.Add("@FileOther", request.FileOther ?? "");
+            parameters.Add("@AttachmentJson", jsonForSql);
 
             return await conn.QueryFirstOrDefaultAsync<string>(
                 "sp_EContract_InsertJob_Full_v2",
@@ -1489,5 +1502,54 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 commandType: CommandType.StoredProcedure
             );
         }
+
+        public async Task<IEnumerable<object>> GetAttachmentsByOidAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosDocument);
+            var baseUrl = _configuration["FileConfig:BaseUrl"];
+
+            const string sql = @"
+                SELECT AttachID, AttachFile as FileName, AttachNote as Note, 
+                       LinkFile as RelativePath, AttachDate
+                FROM [BosDocument].[dbo].[DocAttachfile]
+                WHERE OID = @OID
+                ORDER BY AttachDate DESC";
+
+            var files = await conn.QueryAsync<dynamic>(sql, new { OID = oid });
+
+            return files.Select(f => new {
+                f.AttachID,
+                f.FileName,
+                f.Note,
+                f.AttachDate,
+                ViewUrl = $"{baseUrl}/{f.RelativePath}"
+            });
+        }
+
+        public async Task<int> AddAttachmentsAsync(string oid, string factorId, string entryId, string user, string jsonAttachments)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            var parameters = new DynamicParameters();
+            parameters.Add("@OID", oid);
+            parameters.Add("@FactorID", factorId);
+            parameters.Add("@EntryID", entryId);
+            parameters.Add("@Crt_User", user);
+            parameters.Add("@AttachmentJson", jsonAttachments);
+
+            return await conn.ExecuteAsync("sp_EContract_AddAttachments", parameters, commandType: CommandType.StoredProcedure);
+        }
+
+        public async Task<IEnumerable<dynamic>> GetRawAttachmentsByOidAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosDocument);
+            const string sql = @"
+                SELECT AttachID, AttachFile, AttachNote, LinkFile, AttachDate 
+                FROM [BosDocument].[dbo].[DocAttachfile] 
+                WHERE OID = @OID 
+                ORDER BY AttachDate DESC";
+
+            return await conn.QueryAsync<dynamic>(sql, new { OID = oid });
+        }
+        
     }
 }

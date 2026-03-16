@@ -73,5 +73,11 @@ namespace ERP_Portal_RC.Domain.Entities
 
         [StringLength(500)]
         public string FileOther { get; set; } = "";
+        public List<AttachmentItem> Attachments { get; set; } = new List<AttachmentItem>();
+    }
+    public class AttachmentItem
+    {
+        public string? FileName { get; set; }
+        public string? RelativePath { get; set; }
     }
 }
