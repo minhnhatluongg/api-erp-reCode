@@ -11,15 +11,21 @@ namespace ERP_Portal_RC.Application.DTOs
     {
         public string? OID { get; set; }
         public string? CmpnName { get; set; }
+        public string? CusPeople_Sign { get; set; }
+        public string? CusPosition_BySign { get; set; }
         public string? CmpnTax { get; set; }
         public string? CmpnAddress { get; set; }
         public DateTime? ODate { get; set; } = DateTime.Now;
         public string? CusName { get; set; }
         public string? CusTax { get; set; }
         public string? CusEmail { get; set; }
+        public string? CusTel { get; set; }
         public string? CusAddress { get; set; }
         public string? PositionName { get; set; }
         public string? BankInfo { get; set; }
+        public string? CusBankNumber { get; set; }
+        public string? CusBankAddress { get; set; }
+        public string? Description { get; set; }
         public int CurrSignNumb { get; set; }
         public bool IsTT78 { get; set; }
         public bool IsshowYCCS { get; set; }
