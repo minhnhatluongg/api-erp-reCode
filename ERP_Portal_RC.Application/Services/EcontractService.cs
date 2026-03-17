@@ -1276,12 +1276,24 @@ namespace ERP_Portal_RC.Application.Services
                     OID = resultRaw.EContract.OID,
                     CusName = resultRaw.EContract.CusName,
                     CmpnTax = resultRaw.EContract.CmpnTax,
+                    CmpnName = resultRaw.EContract.CmpnName,
                     CmpnAddress = resultRaw.EContract.CmpnAddress,
                     ODate = resultRaw.EContract.ODate,
                     CurrSignNumb = resultRaw.EContract.CurrSignNumb,
                     IsTT78 = resultRaw.EContract.IsTT78,
                     Date_BusLicence = DateTime.TryParse(resultRaw.EContract.Date_BusLicence, out var date) ? date : null,
-                    RefeContractDate = resultRaw.EContract.RefeContractDate
+                    RefeContractDate = resultRaw.EContract.RefeContractDate,
+                    CusPeople_Sign = resultRaw.EContract.CusPeople_Sign,
+                    CusPosition_BySign = resultRaw.EContract.CusPosition_BySign,
+                    Description = resultRaw.EContract.Descrip,
+                    CusTax = resultRaw.EContract.CusTax,
+                    CusTel = resultRaw.EContract.CusTel,
+                    CusAddress = resultRaw.EContract.CusAddress,
+                    CusEmail = resultRaw.EContract.CusEmail,
+                    CusBankAddress = resultRaw.EContract.CusBankAddress,
+                    CusBankNumber = resultRaw.EContract.CusBankNumber,
+                    BankInfo = $"{resultRaw.EContract.CusBankNumber} - {resultRaw.EContract.CusBankAddress}",
+                    PositionName = resultRaw.EContract.CusPosition_BySign
                 },
 
                 JobDetail = resultRaw.Jobs.Select(j => new JobDetailDTO
@@ -1291,7 +1303,11 @@ namespace ERP_Portal_RC.Application.Services
                     FactorID = j.FactorID,
                     InvcSign = j.InvcSign,
                     InvcFrm = (int)j.InvcFrm, 
-                    InvcEnd = (int)j.InvcEnd
+                    InvcEnd = (int)j.InvcEnd,
+                    ReferenceInfo = j.ReferenceInfo,
+                    Descrip = j.Descrip,
+                    FileInvoice = j.FileInvoice, 
+                    FileLogo = j.FileLogo, 
                 }).ToList(),
 
                 JobPost = resultRaw.JobPosts, 
@@ -1300,7 +1316,14 @@ namespace ERP_Portal_RC.Application.Services
                 Vendor = new VendorDTO
                 {
                     VName = resultRaw.Vendor?.vName,
-                    TaxCode = resultRaw.Vendor?.TaxCode
+                    TaxCode = resultRaw.Vendor?.TaxCode,
+                    CmpnID = resultRaw.Vendor?.cmpnID,
+                    Address = resultRaw.Vendor?.Address,
+                    Tel = resultRaw.Vendor?.Tel,
+                    Email = resultRaw.Vendor?.Email,
+                    Website = resultRaw.Vendor?.Website,
+                    PositionName = resultRaw.Vendor?.CmpName_Sign,
+                    Director = resultRaw.Vendor?.Director,
                 },
 
                 TemplateEcontract = resultRaw.TemplateEcontract,

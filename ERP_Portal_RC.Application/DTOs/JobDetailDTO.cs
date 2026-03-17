@@ -39,6 +39,8 @@ namespace ERP_Portal_RC.Application.DTOs
         public string? InvcSample { get; set; }
         public string? Descrip  { get; set; }
         public string? ReferenceInfo { get; set; }
+        public string? FileLogo { get; set; }
+        public string? FileInvoice{ get; set; }
 
         public bool IsSave { get; set; }
         public bool IsDesignInvoices { get; set; }
