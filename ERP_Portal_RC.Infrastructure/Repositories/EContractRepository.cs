@@ -1474,13 +1474,13 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@Crt_User", request.Crt_User);
             parameters.Add("@CusTax", request.CusTax);
             parameters.Add("@CusName", request.CusName);
-            parameters.Add("@EntryName", request.EntryName);
+            parameters.Add("@EntryName", request.EntryName ?? "");
             parameters.Add("@ItemID", request.ItemID);
             parameters.Add("@InvcSign", request.InvcSign);
             parameters.Add("@InvcFrm", request.InvcFrm);
             parameters.Add("@InvcEnd", request.InvcEnd);
             parameters.Add("@ReferenceDate", request.ReferenceDate);
-            parameters.Add("@ReferenceInfo", request.ReferenceInfo);
+            parameters.Add("@ReferenceInfo", request.ReferenceInfo ?? "");
             parameters.Add("@InvcSample", request.InvcSample);
             parameters.Add("@FileInvoice", request.FileInvoice ?? "");
             parameters.Add("@FileOther", request.FileOther ?? "");

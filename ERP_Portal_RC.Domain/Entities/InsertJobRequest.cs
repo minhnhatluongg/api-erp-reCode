@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace ERP_Portal_RC.Domain.Entities
@@ -21,16 +22,18 @@ namespace ERP_Portal_RC.Domain.Entities
         [StringLength(50)]
         public string FactorID { get; set; }
 
+
+        [JsonIgnore]
         [StringLength(10)]
-        public string CmpnID { get; set; } = "26"; // Mặc định là '26' như trong SP
+        public string CmpnID { get; set; } = "26"; 
 
         [Required]
         [StringLength(50)]
         public string OperDept { get; set; }
 
-        [Required]
+        [JsonIgnore]
         [StringLength(50)]
-        public string Crt_User { get; set; }
+        public string? Crt_User { get; set; }
 
         [Required]
         [StringLength(50)]
@@ -40,9 +43,9 @@ namespace ERP_Portal_RC.Domain.Entities
         [StringLength(500)]
         public string CusName { get; set; }
 
-        [Required]
+        [JsonIgnore]
         [StringLength(250)]
-        public string EntryName { get; set; }
+        public string? EntryName { get; set; }
 
         [Required]
         [StringLength(50)]
@@ -61,8 +64,9 @@ namespace ERP_Portal_RC.Domain.Entities
         [Required]
         public DateTime ReferenceDate { get; set; }
 
+        [JsonIgnore]
         [StringLength(500)]
-        public string ReferenceInfo { get; set; }
+        public string? ReferenceInfo { get; set; }
 
         [Required]
         [StringLength(50)]
