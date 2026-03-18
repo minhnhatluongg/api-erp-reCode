@@ -56,7 +56,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task HandleAutomaticJobAsync(EContractDetailsViewModel model, EContractHistoryRaw2 raw, string oid, string kt);
         Task<PagedResponse<DepartmentDTO>> GetDepartmentsPagedAsync(string operDeptList, int pageNumber, int pageSize);
         Task<ApiResponse<List<EContractDetailDTO>>> VerifyJobDetailsAsync(string cusTax, string oid);
-        Task<ApiResponse<object>> UploadContractFilesAsync(IFormFileCollection files, string oid);
+        Task<ApiResponse<List<string>>> UploadContractFilesAsync(IFormFileCollection files, string oid);
         Task<ApiResponse<object>> SaveJobAsync(SaveJobRequestDto request, string userCode);
         Task<ApiResponse<object>> ApproveJobNowAsync(ApproveJobRequestDto request, string userCode, string fullName);
         Task<EContractsViewModel> GetContractDetailForDisplayAsync(string oid, string userCode, string grpList, string firstClaimValue);
@@ -65,8 +65,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ApiResponse<string>> GetNextJobOIDAsync(string mainOid);
         Task<ApiResponse<string>> CreateJobAsync(InsertJobRequest request);
         Task<ApiResponse<JobStatusResponse>> GetJobStatusAsync(string referenceId, string factorId, string entryId);
-
-        Task<ApiResponse<object>> AddMoreFilesAsync(string oid, string factorId, string entryId, List<AttachmentItem> newFiles, string user);
         Task<ApiResponse<IEnumerable<object>>> GetAttachmentsByOidAsync(string oid);
+        //Task<ApiResponse<object>> AddMoreFilesAsync(string oid, string factorId, string entryId, List<string> fileLinks, string currentUser);
     } 
 }

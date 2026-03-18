@@ -1071,10 +1071,10 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
-        public async Task<ApiResponse<object>> UploadContractFilesAsync(IFormFileCollection files, string oid)
+        public async Task<ApiResponse<List<string>>> UploadContractFilesAsync(IFormFileCollection files, string oid)
         {
-            var fileInfos = new List<AttachmentItem>(); // Dùng class AttachmentItem đã định nghĩa
-            string baseUrl = _configuration["FileConfig:BaseUrl"];
+            var fileLinks = new List<string>();
+            string baseUrl = _configuration["FileConfig:BaseUrl"]; // Ví dụ: https://api-erprc.win-tech.vn
 
             foreach (var file in files)
             {
@@ -1082,15 +1082,11 @@ namespace ERP_Portal_RC.Application.Services
 
                 if (relativePath != null)
                 {
-                    fileInfos.Add(new AttachmentItem
-                    {
-                        FileName = file.FileName,
-                        RelativePath = relativePath
-                    });
+                    string fullUrl = $"{baseUrl.TrimEnd('/')}/{relativePath.TrimStart('/')}";
+                    fileLinks.Add(fullUrl);
                 }
             }
-            // Trả về List object để FE có dữ liệu gọi tiếp API lưu Job/AddMore
-            return ApiResponse<object>.SuccessResponse(fileInfos, "Upload file thành công.");
+            return ApiResponse<List<string>>.SuccessResponse(fileLinks, "Upload file thành công.");
         }
 
         public async Task<ApiResponse<object>> SaveJobAsync(SaveJobRequestDto request, string userCode)
@@ -1435,18 +1431,6 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
-        public async Task<ApiResponse<object>> AddMoreFilesAsync(string oid, string factorId, string entryId, List<AttachmentItem> newFiles, string user)
-        {
-            string jsonAttachments = JsonConvert.SerializeObject(newFiles);
-
-            var result = await _eContractRepository.AddAttachmentsAsync(oid, factorId, entryId, user, jsonAttachments);
-
-            if (result > 0)
-                return ApiResponse<object>.SuccessResponse(null, "Đính kèm thêm file thành công.");
-
-            return ApiResponse<object>.ErrorResponse("Không có dữ liệu nào được cập nhật.");
-        }
-
         public async Task<ApiResponse<IEnumerable<object>>> GetAttachmentsByOidAsync(string oid)
         {
             var rawFiles = await _eContractRepository.GetRawAttachmentsByOidAsync(oid);
@@ -1460,6 +1444,8 @@ namespace ERP_Portal_RC.Application.Services
             });
             return ApiResponse<IEnumerable<object>>.SuccessResponse(formattedFiles, "Lấy danh sách file thành công.");
         }
+
+        
     }
 }
 

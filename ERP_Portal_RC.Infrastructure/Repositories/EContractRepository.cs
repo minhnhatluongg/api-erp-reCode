@@ -1462,8 +1462,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         public async Task<string> InsertJobFullAsync(InsertJobRequest request)
         {
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
-            string jsonForSql = request.Attachments != null
-                ? JsonConvert.SerializeObject(request.Attachments) : "[]";
 
             var parameters = new DynamicParameters();
             parameters.Add("@ReferenceID", request.ReferenceID);
@@ -1475,6 +1473,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CusTax", request.CusTax);
             parameters.Add("@CusName", request.CusName);
             parameters.Add("@EntryName", request.EntryName ?? "");
+            parameters.Add("@Descrip", request.Descrip);
             parameters.Add("@ItemID", request.ItemID);
             parameters.Add("@InvcSign", request.InvcSign);
             parameters.Add("@InvcFrm", request.InvcFrm);
@@ -1482,9 +1481,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@ReferenceDate", request.ReferenceDate);
             parameters.Add("@ReferenceInfo", request.ReferenceInfo ?? "");
             parameters.Add("@InvcSample", request.InvcSample);
-            parameters.Add("@FileInvoice", request.FileInvoice ?? "");
-            parameters.Add("@FileOther", request.FileOther ?? "");
-            parameters.Add("@AttachmentJson", jsonForSql);
+            parameters.Add("@FileInvoice", request.FileInvoice ?? ""); // Truyền link full
+            parameters.Add("@FileOther", request.FileOther ?? "");     // Truyền link full
 
             return await conn.QueryFirstOrDefaultAsync<string>(
                 "sp_EContract_InsertJob_Full_v2",

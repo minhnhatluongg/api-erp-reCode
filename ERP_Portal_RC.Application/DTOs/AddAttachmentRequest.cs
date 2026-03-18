@@ -1,6 +1,7 @@
 ﻿using ERP_Portal_RC.Domain.Entities;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,6 +14,6 @@ namespace ERP_Portal_RC.Application.DTOs
         public string? FactorID { get; set; }
         public string? EntryID { get; set; }
         public string? Crt_User { get; set; }
-        public List<AttachmentItem>? Files { get; set; }
+        [Required] public List<string> Files { get; set; } = new List<string>();
     }
 }

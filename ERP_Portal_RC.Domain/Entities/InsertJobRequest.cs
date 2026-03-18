@@ -1,87 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
-namespace ERP_Portal_RC.Domain.Entities
+public class InsertJobRequest
 {
-    public class InsertJobRequest
-    {
-        [Required]
-        [StringLength(50)]
-        public string ReferenceID { get; set; }
+    [Required] public string ReferenceID { get; set; }
+    [Required] public string EntryID { get; set; }
+    [Required] public string FactorID { get; set; }
+    [Required] public string OperDept { get; set; }
+    [Required] public string CusTax { get; set; }
+    [Required] public string CusName { get; set; }
+    [Required] public string ItemID { get; set; }
+    [Required] public string InvcSign { get; set; }
+    [Required] public int InvcFrm { get; set; }
+    [Required] public int InvcEnd { get; set; }
+    [Required] public DateTime ReferenceDate { get; set; }
+    [Required] public string InvcSample { get; set; }
 
-        [Required]
-        [StringLength(50)]
-        public string EntryID { get; set; }
+    public string? Descrip { get; set; }
 
-        [Required]
-        [StringLength(50)]
-        public string FactorID { get; set; }
+    public string FileInvoice { get; set; } = "";
+    public string FileOther { get; set; } = "";
 
-
-        [JsonIgnore]
-        [StringLength(10)]
-        public string CmpnID { get; set; } = "26"; 
-
-        [Required]
-        [StringLength(50)]
-        public string OperDept { get; set; }
-
-        [JsonIgnore]
-        [StringLength(50)]
-        public string? Crt_User { get; set; }
-
-        [Required]
-        [StringLength(50)]
-        public string CusTax { get; set; }
-
-        [Required]
-        [StringLength(500)]
-        public string CusName { get; set; }
-
-        [JsonIgnore]
-        [StringLength(250)]
-        public string? EntryName { get; set; }
-
-        [Required]
-        [StringLength(50)]
-        public string ItemID { get; set; }
-
-        [Required]
-        [StringLength(50)]
-        public string InvcSign { get; set; }
-
-        [Required]
-        public int InvcFrm { get; set; }
-
-        [Required]
-        public int InvcEnd { get; set; }
-
-        [Required]
-        public DateTime ReferenceDate { get; set; }
-
-        [JsonIgnore]
-        [StringLength(500)]
-        public string? ReferenceInfo { get; set; }
-
-        [Required]
-        [StringLength(50)]
-        public string InvcSample { get; set; }
-
-        [StringLength(500)]
-        public string FileInvoice { get; set; } = "";
-
-        [StringLength(500)]
-        public string FileOther { get; set; } = "";
-        public List<AttachmentItem> Attachments { get; set; } = new List<AttachmentItem>();
-    }
-    public class AttachmentItem
-    {
-        public string? FileName { get; set; }
-        public string? RelativePath { get; set; }
-    }
+    [JsonIgnore] public string CmpnID { get; set; } = "26";
+    [JsonIgnore] public string? Crt_User { get; set; }
+    [JsonIgnore] public string? EntryName { get; set; }
+    [JsonIgnore] public string? ReferenceInfo { get; set; }
 }

@@ -27,30 +27,6 @@ namespace API.ERP_Portal_RC.Controllers
             var response = await _econtractService.GetAttachmentsByOidAsync(decodedOid);
             return Ok(response);
         }
-
-        /// <summary>
-        /// Bổ sung file đính kèm cho một OID đã tồn tại
-        /// </summary>
-        [HttpPost("add-more-for-Econtracts")]
-        [ApiExplorerSettings(IgnoreApi = true)]
-        public async Task<IActionResult> AddMore([FromBody] AddAttachmentRequest request)
-        {
-            string currentUser = User.FindFirst("UserCode")?.Value;
-            if (string.IsNullOrEmpty(currentUser))
-            {
-                return Unauthorized(ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin định danh người dùng", 401));
-            }
-            request.Crt_User = currentUser;
-
-            var response = await _econtractService.AddMoreFilesAsync(
-                request.OID,
-                request.FactorID,
-                request.EntryID,
-                request.Files,
-                currentUser
-            );
-
-            return Ok(response);
-        }
+        
     }
 }
