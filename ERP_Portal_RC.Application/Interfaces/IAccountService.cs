@@ -8,5 +8,6 @@ namespace ERP_Portal_RC.Application.Interfaces
     {
         Task<MenuResponseDto> GetUserMenuAsync(string userName, string groupList, string cmpnId, string? appSite = null);
         Dictionary<string, AppLoginInfo> ParseApiLoginString(string apiLoginString);
+        Task<EvatAccountInfo> CheckAccountAsync(string mst, string? cccd);
     }
 }
