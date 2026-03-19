@@ -148,5 +148,27 @@ namespace ERP_Portal_RC.Controllers
                     "Lỗi server khi kiểm tra quyền", 500));
             }
         }
+
+        [HttpGet("check-account")]
+        public async Task<IActionResult> CheckAccount([FromQuery] string mst, [FromQuery] string? cccd = null)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(mst))
+                    return BadRequest(new { success = false, message = "MST không được để trống." });
+
+                var result = await _accountService.CheckAccountAsync(mst, cccd);
+
+                return Ok(new
+                {
+                    success = true,
+                    data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message});
+            }
+        }
     }
 }

@@ -5,10 +5,13 @@ using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
 using ERP_Portal_RC.Infrastructure.Repositories;
+using Infrastructure.Repositories;
 using Interface.ReleaseInvoice.Repo;
 using Interface.ReleaseInvoice.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
@@ -19,6 +22,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHostedService<TokenCleanupWorker>();
+
+//Config upload file
+var provider = new FileExtensionContentTypeProvider();
+provider.Mappings[".xslt"] = "text/xml";
+provider.Mappings[".json"] = "application/json";
+
 // Configure Session
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -67,6 +76,9 @@ builder.Services.AddScoped<IXmlDataRepository, XmlDataRepository>();
 builder.Services.AddScoped<ITemplateRepository, TemplateRepository>();
 builder.Services.AddScoped<IContractCheckRepository, ContractCheckRepository>();
 builder.Services.AddScoped<IContractSignRepository, ContractSignRepository>();
+builder.Services.AddScoped<IConnectionRepository, ConnectionRepository>();
+builder.Services.AddScoped<IEvatRepository, EvatRepository>();
+builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext
@@ -197,7 +209,12 @@ app.UseHttpsRedirection();
 
 app.UseCors("AllowAll");
 //Enable Files
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(@"D:\Attachments"),
+    RequestPath = "/uploads",
+    ContentTypeProvider = provider
+});
 // Enable Session
 app.UseSession();
 

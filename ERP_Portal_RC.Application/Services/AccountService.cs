@@ -9,10 +9,13 @@ namespace ERP_Portal_RC.Application.Services
     {
         private readonly IAccountRepository _accountRepository;
         private readonly ICustomStore _customStore;
+        private readonly IConnectionRepository _connectionRepo;
+        private readonly IEvatRepository _evatRepo;
 
-        public AccountService(IAccountRepository accountRepository, ICustomStore customStore)
+        public AccountService(IAccountRepository accountRepository, ICustomStore customStore, IConnectionRepository connectionRepository, IEvatRepository evatRepository)
         {
-
+            _connectionRepo = connectionRepository;
+            _evatRepo = evatRepository;
             _accountRepository = accountRepository;
             _customStore = customStore;
         }
@@ -25,7 +28,7 @@ namespace ERP_Portal_RC.Application.Services
             var userInfoList = await _customStore.GetUserByLoginNameAsync(userName, cmpnId);
             var userInfo = userInfoList.FirstOrDefault();
 
-            // 2. Logic làm sạch GroupList (Theo API gốc)
+            // 2. Logic làm sạch GroupList 
             var cleanedGroupList = groupList?.Replace("'", string.Empty) ?? string.Empty;
             if (cleanedGroupList == "E15.067.09732") cleanedGroupList = string.Empty; //
 
@@ -79,17 +82,15 @@ namespace ERP_Portal_RC.Application.Services
                     AcssRght = m.AcssRght,
                     ViewRght = m.ViewRght,
                     Params = new Dictionary<string, string>(),
-                    Variants = new Dictionary<string, string>() // Thêm Dictionary cho Variants
+                    Variants = new Dictionary<string, string>() 
                 };
 
-                // Gom Params có giá trị
                 for (int i = 1; i <= 50; i++)
                 {
                     var val = m.GetType().GetProperty($"Param{i:D2}")?.GetValue(m)?.ToString();
                     if (!string.IsNullOrWhiteSpace(val)) dto.Params.Add($"Param{i:D2}", val);
                 }
 
-                // Gom Variants có giá trị [CẬP NHẬT MỚI]
                 for (int i = 1; i <= 30; i++)
                 {
                     var val = m.GetType().GetProperty($"Variant{i:D2}")?.GetValue(m)?.ToString();
@@ -99,7 +100,6 @@ namespace ERP_Portal_RC.Application.Services
                 return dto;
             }).ToList();
 
-            // 9. Trồng cây
             response.Menu = BuildMenuTree(flatMenu);
             response.TotalMenuItems = flatMenu.Count;
             response.IsManager = isManager;
@@ -234,6 +234,48 @@ namespace ERP_Portal_RC.Application.Services
             return tree;
         }
 
+
+
         #endregion
+
+        public async Task<EvatAccountInfo> CheckAccountAsync(string mst, string? cccd)
+        {
+            var dynamicConn = _connectionRepo.GetCnServerByMST(mst, cccd, "EVAT");
+            var ipServer = _connectionRepo.GetIPServerByMST(mst, cccd, "EVAT");
+
+            if (string.IsNullOrEmpty(dynamicConn))
+            {
+                return new EvatAccountInfo
+                {
+                    HasAccount = false,
+                    Mst = mst,
+                    Cccd = cccd,
+                    ServerIp = "Not Found",
+                };
+            }
+
+            if (!dynamicConn.Contains("Enlist", StringComparison.OrdinalIgnoreCase))
+            {
+                dynamicConn += ";Enlist=false";
+            }
+
+            var accountInfo = await _evatRepo.GetAccountByTaxcodeAsync(dynamicConn, mst, cccd);
+
+            if (accountInfo == null)
+            {
+                return new EvatAccountInfo
+                {
+                    HasAccount = false,
+                    Mst = mst,
+                    Cccd = cccd,
+                    ServerIp = ipServer,
+                };
+            }
+
+            accountInfo.ServerIp = ipServer;
+            accountInfo.HasAccount = true;
+
+            return accountInfo;
+        }
     }
 }
