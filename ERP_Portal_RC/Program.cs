@@ -2,6 +2,7 @@ using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Application.Mappings;
 using ERP_Portal_RC.Application.Services;
+using ERP_Portal_RC.Domain.Common.Logging;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
 using ERP_Portal_RC.Infrastructure.Repositories;
@@ -22,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHostedService<TokenCleanupWorker>();
+builder.Services.AddSingleton<EContractFileLogger>();
 
 //Config upload file
 var provider = new FileExtensionContentTypeProvider();
@@ -62,6 +64,8 @@ builder.Services.AddScoped<IRegistrationCodeService, RegistrationCodeService>();
 builder.Services.AddScoped<IInvoicePreviewService, InvoicePreviewService>();
 builder.Services.AddScoped<IContractSignService, ContractSignService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+builder.Services.AddScoped<ICompanyService, CompanyService>();
+builder.Services.AddScoped<IIntegrationService, IntegrationService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();

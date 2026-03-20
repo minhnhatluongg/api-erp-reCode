@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using ERP_Portal_RC.Domain.Entities;
+using ERP_Portal_RC.Domain.EntitiesIntergration;
 using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -1548,6 +1549,183 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
             return await conn.QueryAsync<dynamic>(sql, new { OID = oid });
         }
-        
+
+        public async Task<bool> InsertOrderBasicAsync(
+            EContractIntegrationRequest model, string merchantId, string orderOid, string crtUser)
+        {
+            var connection = _dbConnectionFactory.GetConnection(BosOnline);
+
+            if (connection.State != ConnectionState.Open)
+                connection.Open();
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                var dt = new DataTable();
+                dt.Columns.Add("ItemNo", typeof(int));      // 1
+                dt.Columns.Add("OID", typeof(string));   // 2
+                dt.Columns.Add("ItemID", typeof(string));   // 3
+                dt.Columns.Add("ItemName", typeof(string));   // 4
+                dt.Columns.Add("ItemUnit", typeof(string));   // 5
+                dt.Columns.Add("ItemPrice", typeof(decimal));  // 6
+                dt.Columns.Add("ItemQtty", typeof(decimal));  // 7
+                dt.Columns.Add("ItemAmnt", typeof(decimal));  // 8
+                dt.Columns.Add("VAT_Rate", typeof(decimal));  // 9
+                dt.Columns.Add("VAT_Amnt", typeof(decimal));  // 10
+                dt.Columns.Add("Sum_Amnt", typeof(decimal));  // 11
+                dt.Columns.Add("Descrip", typeof(string));   // 12
+                dt.Columns.Add("InvcSign", typeof(string));   // 13
+                dt.Columns.Add("InvcFrm", typeof(int));      // 14
+                dt.Columns.Add("InvcEnd", typeof(int));      // 15
+                dt.Columns.Add("invcSample", typeof(string));   // 16
+                dt.Columns.Add("itemUnitName", typeof(string));   // 17
+                dt.Columns.Add("ItemPerBox", typeof(decimal));  // 18
+
+                if (model.Details != null)
+                {
+                    int itemNo = 0; 
+                    foreach (var item in model.Details)
+                    {
+                        dt.Rows.Add(
+                        itemNo++,       // ItemNo  — tự tăng
+                        orderOid,       // OID
+                        item.ItemID,
+                        item.ItemName,
+                        item.ItemUnit,
+                        item.ItemPrice,
+                        item.ItemQtty,
+                        item.ItemAmnt,
+                        item.VAT_Rate,
+                        item.VAT_Amnt,
+                        item.Sum_Amnt,
+                        item.Descrip,
+                        item.InvcSign,
+                        item.InvcFrm,
+                        item.InvcEnd,
+                        item.InvcSample,
+                        item.ItemUnitName,  // itemUnitName
+                        0               // ItemPerBox
+                    );
+                    }
+                }
+
+                var p = new DynamicParameters();
+
+                // Thông tin công ty (Bên B)
+                p.Add("@CmpnID", model.MyCmpnID);
+                p.Add("@MerchantID", merchantId);
+                p.Add("@OID", orderOid);
+                p.Add("@FactorID", model.FactorID ?? "EContract");
+                p.Add("@EntryID", model.EntryID ?? "EC:001");
+                p.Add("@SaleEmID", model.SaleEmID);
+                p.Add("@CmpnName", model.MyCmpnName);
+                p.Add("@CmpnTax", model.MyCmpnTax);
+                p.Add("@CmpnAddress", model.MyCmpnAddress);
+                p.Add("@CmpnContactAddress", model.MyCmpnContactAddress ?? model.MyCmpnAddress);
+                p.Add("@CmpnMail", model.MyCmpnMail);
+                p.Add("@CmpnTel", model.MyCmpnTel);             
+                p.Add("@CmpnPeople_Sign", model.MyCmpnPeople_Sign);     
+                p.Add("@CmpnPosition_BySign", model.MyCmpnPosition_Sign);   
+                p.Add("@CmpnBankNumber", model.MyCmpnBankNumber);       
+                p.Add("@CmpnBankAddress", model.MyCmpnBankAddress);
+
+
+                //Field ràng buộc not null
+                p.Add("@RegionID", string.Empty);
+                p.Add("@DscnAmnt", 0);
+                p.Add("@CmpID_Sign", "");
+
+
+
+
+                // Thông tin khách hàng (Bên A)
+                p.Add("@CusName", model.CusName);
+                p.Add("@CusTax", model.CusTax);
+                p.Add("@CusAddress", model.CusAddress);
+                p.Add("@CusEmail", model.CusEmail);
+                p.Add("@CusTel", model.CusTel);
+                p.Add("@CusPeople_Sign", model.CusPeople_Sign);
+                p.Add("@CusPosition_BySign", model.CusPosition_BySign);
+                p.Add("@CusBankNumber", model.CusBankNumber);
+                p.Add("@CusBankAddress", model.CusBankAddress);
+
+                // Tài chính
+                p.Add("@PrdcAmnt", model.PrdcAmnt);
+                p.Add("@VAT_Rate", model.VAT_Rate);
+                p.Add("@VAT_Amnt", model.VAT_Amnt);
+                p.Add("@Sum_Amnt", model.Sum_Amnt);
+                p.Add("@SampleID", model.SampleID);
+                p.Add("@Descrip", model.Descrip ?? "");
+                p.Add("@Crt_User", crtUser);
+
+                // ← Parameters mới
+                p.Add("@ODate", model.ODate ?? DateTime.Now);
+                p.Add("@SignDate", model.SignDate ?? DateTime.Now);
+                p.Add("@HtmlContent", model.HtmlContent ?? "INCOM-MINI-APP");
+                p.Add("@OidContract", model.OidContract);
+                p.Add("@RefeContractDate", model.RefeContractDate);
+                p.Add("@IsCapBu", model.IsCapBu);
+                p.Add("@IsGiaHan", model.IsGiaHan);
+                p.Add("@IsTT78", model.IsTT78);
+                p.Add("@IsOnline", model.IsOnline);
+
+                p.Add("@Details", dt.AsTableValuedParameter("dbo.EContractDetailType"));
+
+                await connection.ExecuteAsync(
+                    "[dbo].[sp_EContract_Insert_Basic]", p,
+                    transaction: transaction,                    
+                    commandType: CommandType.StoredProcedure);
+
+                transaction.Commit();                            
+                return true;
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
+        public async Task<bool> OrderExistsAsync(string orderOid)
+        {
+            var connection = _dbConnectionFactory.GetConnection(BosOnline);
+
+            var p = new DynamicParameters();
+            p.Add("@OID", orderOid);
+
+            var result = await connection.ExecuteScalarAsync<int>(
+                "[dbo].[sp_EContract_CheckOrderExists]",
+                p,
+                commandType: CommandType.StoredProcedure
+            );
+            return result == 1;
+        }
+
+        public async Task<OwnerContract> GetOwnerContractAsync(string companyId = "26")
+        {
+            var connection = _dbConnectionFactory.GetConnection(BosOnline);
+            var result = await connection.QueryFirstOrDefaultAsync<OwnerContract>(
+                "BosOnline..Check_OwnerContract",
+                new { CmpnID = companyId },
+                commandType: CommandType.StoredProcedure);
+            return result;
+        }
+
+        public async Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID)
+        {
+            var connection = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@CusTax", cusTax);
+            p.Add("@SaleEmID", saleEmID);
+
+            var result = await connection.ExecuteScalarAsync<int>(@"
+                    SELECT COUNT(1) 
+                    FROM EContracts 
+                    WHERE CusTax    = @CusTax 
+                      AND Crt_User  = @SaleEmID",
+                p);
+
+            return result > 0;
+        }
     }
 }

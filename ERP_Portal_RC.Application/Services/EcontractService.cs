@@ -1,7 +1,9 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.Integration_Incom;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
+using ERP_Portal_RC.Domain.EntitiesIntergration;
 using ERP_Portal_RC.Domain.Enum;
 using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
@@ -934,7 +936,6 @@ namespace ERP_Portal_RC.Application.Services
 
             return new EContractDetailDTO
             {
-                ItemNo = d.ItemNo,
                 ItemID = d.ItemID,
                 ItemName = d.ItemName,
                 ItemUnit = d.ItemUnit,
@@ -946,7 +947,6 @@ namespace ERP_Portal_RC.Application.Services
                 InvcSign = d.InvcSign,
                 InvcFrm = d.InvcFrm,
                 InvcEnd = calculatedInvcEnd, 
-                UsIN = d.UsIN
             };
         }
         private JobDTO MapToJobDto(JobEntity j)
@@ -1445,7 +1445,98 @@ namespace ERP_Portal_RC.Application.Services
             return ApiResponse<IEnumerable<object>>.SuccessResponse(formattedFiles, "Lấy danh sách file thành công.");
         }
 
-        
+        public async Task<bool> CreateOrderAsync(
+            EContractIntegrationRequestDto model,
+            string merchantId,
+            string orderOid,
+            string crtUser)
+        {
+            var prdcAmnt = model.Details?.Sum(d => d.ItemAmnt) ?? 0;
+            var vatAmnt = model.Details?.Sum(d => d.VAT_Amnt) ?? 0;
+            var sumAmnt = model.Details?.Sum(d => d.Sum_Amnt) ?? 0;
+            var vatRate = model.Details?.FirstOrDefault()?.VAT_Rate ?? 0; 
+
+            var entity = new EContractIntegrationRequest
+            {
+                OID = model.OrderOID,
+                // Header
+                MyCmpnID = model.MyCmpnID,
+                MyCmpnName = model.MyCmpnName,
+                MyCmpnTax = model.MyCmpnTax,
+                MyCmpnAddress = model.MyCmpnAddress,
+                MyCmpnMail = model.MyCmpnMail,
+                MyCmpnTel  = model.MyCmpnTel,
+                MyCmpnContactAddress = model.MyCmpnContactAddress,
+                MyCmpnPeople_Sign = model.MyCmpnPeople_Sign,
+                MyCmpnPosition_Sign = model.MyCmpnPosition_Sign,
+                MyCmpnBankNumber = model.CusBankNumber,
+                MyCmpnBankAddress = model.MyCmpnBankAddress,
+                SaleEmID = model.SaleEmID,
+                CusName = model.CusName,
+                CusTax = model.CusTax,
+                CusAddress = model.CusAddress,
+                CusEmail = model.CusEmail,
+                CusTel = model.CusTel,
+                CusPeople_Sign = model.CusPeople_Sign,
+                CusPosition_BySign = model.CusPosition_BySign,
+                CusBankAddress = model.CusBankAddress,
+                CusBankNumber = model.CusBankNumber,
+                SampleID = model.SampleID,
+                Descrip = model.Descrip,
+
+                // Tổng tự tính
+                PrdcAmnt = prdcAmnt,
+                VAT_Rate = vatRate,
+                VAT_Amnt = vatAmnt,
+                Sum_Amnt = sumAmnt,
+
+                ODate = model.ODate,
+                SignDate = model.SignDate,
+                HtmlContent = model.HtmlContent,
+                OidContract = model.OidContract,
+                RefeContractDate = model.RefeContractDate,
+                IsCapBu = model.IsCapBu,
+                IsGiaHan = model.IsGiaHan,
+                IsTT78 = model.IsTT78,
+                IsOnline = model.IsOnline,
+
+                // Details
+                Details = model.Details?.Select(d => new EContractDetailDto_Incom
+                {
+                    ItemID = d.ItemID,
+                    ItemName = d.ItemName,
+                    ItemUnit = d.ItemUnit,
+                    ItemPrice = d.ItemPrice,
+                    ItemQtty = d.ItemQtty,
+                    ItemAmnt = d.ItemAmnt,
+                    VAT_Rate = d.VAT_Rate,
+                    VAT_Amnt = d.VAT_Amnt,
+                    Sum_Amnt = d.Sum_Amnt,
+                    Descrip = d.Descrip,
+                    InvcSample = d.InvcSample,
+                    InvcSign = d.InvcSign,
+                    InvcFrm = d.InvcFrm,
+                    InvcEnd = d.InvcEnd,
+                }).ToList()
+            };
+
+            return await _eContractRepository.InsertOrderBasicAsync(entity, merchantId, orderOid, crtUser);
+        }
+
+        public async Task<bool> OrderExistsAsync(string orderOid)
+        {
+            return await _eContractRepository.OrderExistsAsync(orderOid);
+        }
+
+        public async Task<OwnerContract> GetOwnerContractAsync(string companyId = "26")
+        {
+            return await _eContractRepository.GetOwnerContractAsync(companyId);
+        }
+
+        public async Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID)
+        {
+            return await _eContractRepository.CheckOrderBySaleAsync(cusTax, saleEmID);
+        }
     }
 }
 

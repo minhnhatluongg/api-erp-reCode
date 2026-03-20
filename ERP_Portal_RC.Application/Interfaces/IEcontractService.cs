@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.Integration_Incom;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Http;
@@ -67,5 +68,9 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ApiResponse<JobStatusResponse>> GetJobStatusAsync(string referenceId, string factorId, string entryId);
         Task<ApiResponse<IEnumerable<object>>> GetAttachmentsByOidAsync(string oid);
         //Task<ApiResponse<object>> AddMoreFilesAsync(string oid, string factorId, string entryId, List<string> fileLinks, string currentUser);
+        Task<bool> CreateOrderAsync(EContractIntegrationRequestDto model, string merchantId, string orderOid, string crtUser);
+        Task<bool> OrderExistsAsync(string orderOid);
+        Task<OwnerContract> GetOwnerContractAsync(string companyId = "26");
+        Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID);
     } 
 }

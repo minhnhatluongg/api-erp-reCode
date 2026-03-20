@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Domain.Entities;
+using ERP_Portal_RC.Domain.EntitiesIntergration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -83,6 +84,9 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<IEnumerable<object>> GetAttachmentsByOidAsync(string oid);
         Task<int> AddAttachmentsAsync(string oid, string factorId, string entryId, string user, string jsonAttachments);
         Task<IEnumerable<dynamic>> GetRawAttachmentsByOidAsync(string oid);
-
+        Task<bool> InsertOrderBasicAsync(EContractIntegrationRequest model, string merchantId, string orderOid, string crtUser);
+        Task<bool> OrderExistsAsync(string orderOid);
+        Task<OwnerContract> GetOwnerContractAsync(string companyId = "26");
+        Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID);
     }
 }
