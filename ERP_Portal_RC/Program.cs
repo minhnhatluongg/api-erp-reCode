@@ -66,6 +66,7 @@ builder.Services.AddScoped<IContractSignService, ContractSignService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IIntegrationService, IntegrationService>();
+builder.Services.AddScoped<ICapTaiKhoanService, CreateAccountService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -83,6 +84,7 @@ builder.Services.AddScoped<IContractSignRepository, ContractSignRepository>();
 builder.Services.AddScoped<IConnectionRepository, ConnectionRepository>();
 builder.Services.AddScoped<IEvatRepository, EvatRepository>();
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
+builder.Services.AddScoped<ICreateAccountRepository, CapTaiKhoanRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext
