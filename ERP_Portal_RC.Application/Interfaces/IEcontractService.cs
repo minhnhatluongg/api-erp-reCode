@@ -72,5 +72,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<bool> OrderExistsAsync(string orderOid);
         Task<OwnerContract> GetOwnerContractAsync(string companyId = "26");
         Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID);
+        Task<ApiResponse<DeXuatCapTaiKhoanResponseDto>> DeXuatCapTaiKhoanAsync(
+            DeXuatCapTaiKhoanRequestDto request);
     } 
 }

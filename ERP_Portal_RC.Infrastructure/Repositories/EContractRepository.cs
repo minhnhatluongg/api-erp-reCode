@@ -567,7 +567,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CmpName_Sign", master.CmpName_Sign ?? "");
             parameters.Add("@isUsingAcc", 0);
             parameters.Add("@SignNumb", -1);
-            parameters.Add("@tokenOID", master.tokenOID); 
+            parameters.Add("@tokenOID", master.tokenOID);
 
             // Thông tin Tiền tệ & Hệ thống
             parameters.Add("@PrdcAmnt", master.PrdcAmnt);
@@ -1060,11 +1060,11 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 mainParams.Add("@Crt_User", job.Crt_User);
                 mainParams.Add("@InvcSign", job.InvcSign ?? string.Empty);
                 mainParams.Add("@InvcFrm", job.InvcFrm ?? 0);
-                mainParams.Add("@InvcEnd", sumInvc); 
+                mainParams.Add("@InvcEnd", sumInvc);
                 mainParams.Add("@invcSample", job.invcSample ?? string.Empty);
                 mainParams.Add("@PackID", job.PackID ?? string.Empty);
-                mainParams.Add("@ReferenceInfo", info); 
-                mainParams.Add("@CountChange", countChange); 
+                mainParams.Add("@ReferenceInfo", info);
+                mainParams.Add("@CountChange", countChange);
                 mainParams.Add("@Reason", job.ChangeOption ?? string.Empty);
                 mainParams.Add("@DescriptChange", job.DescriptChange ?? string.Empty);
                 mainParams.Add("@TemplateID", job.TemplateID ?? string.Empty);
@@ -1080,13 +1080,13 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     var packParams = new DynamicParameters();
                     packParams.Add("@OID", job.OID);
                     packParams.Add("@ItemID", pack.ItemID);
-                    packParams.Add("@Descrip", pack.Descrip ?? string.Empty); 
+                    packParams.Add("@Descrip", pack.Descrip ?? string.Empty);
                     packParams.Add("@InvcSign", pack.InvcSign);
                     packParams.Add("@InvcFrm", pack.InvcFrm);
                     packParams.Add("@InvcEnd", pack.InvcEnd);
                     packParams.Add("@invcSample", pack.invcSample);
                     packParams.Add("@ItemNo", pack.ItemNo);
-                    packParams.Add("@PublDate", pack.PublDate); 
+                    packParams.Add("@PublDate", pack.PublDate);
                     packParams.Add("@Use_Date", pack.Use_Date);
 
                     await conn.ExecuteAsync("wpsIns_EContractJobDetail", packParams, transaction, commandType: CommandType.StoredProcedure);
@@ -1112,9 +1112,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 "GetDebtLtdSales",
                 parameters,
                 commandType: CommandType.StoredProcedure
-    );
+            );
         }
-
         public async Task<List<ListFile>> GetListFilesAsync(string oid)
         {
             using var connection = _dbConnectionFactory.GetConnection(BosOnline);
@@ -1162,10 +1161,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     parameters,
                     commandType: CommandType.StoredProcedure))
                 {
-                    // Table 1: select * from #job
                     data.Jobs = (await multi.ReadAsync<JobEntity>()).ToList();
-
-                    // Table 2: select email.* from tbl_EmailUser 
                     data.EmailUserDept = await multi.ReadFirstOrDefaultAsync<EmailUserDept>();
                 }
             }
@@ -1239,7 +1235,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 var detailParams = new DynamicParameters();
                 detailParams.Add("@ReferenceID", job.ReferenceID);
                 detailParams.Add("@FactorID", job.FactorID);
-                detailParams.Add("@EntryID", "JB:005"); 
+                detailParams.Add("@EntryID", "JB:005");
                 detailParams.Add("@Descrip", job.Descrip ?? string.Empty);
                 detailParams.Add("@FileLogo", job.FileLogo ?? string.Empty);
                 detailParams.Add("@FileInvoice", job.FileInvoice ?? string.Empty);
@@ -1255,7 +1251,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 detailParams.Add("@CountChange", countChange);
                 detailParams.Add("@Reason", job.ChangeOption ?? string.Empty);
                 detailParams.Add("@DescriptChange", job.DescriptChange ?? string.Empty);
-                detailParams.Add("@exeEmplName", job.EmplName ?? string.Empty); 
+                detailParams.Add("@exeEmplName", job.EmplName ?? string.Empty);
                 detailParams.Add("@exeEmplID", job.EmplID ?? string.Empty);
                 detailParams.Add("@ReferenceDate", DateTime.Now);
                 detailParams.Add("@OperDept", job.OperDept);
@@ -1305,8 +1301,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 approveParams.Add("@DataTbl", string.Empty);
                 approveParams.Add("@SignTble", "zsgn_EContractJobs");
                 approveParams.Add("@SignChck", string.Empty);
-                approveParams.Add("@holdSignNumb", 0); 
-                approveParams.Add("@nextSignNumb", 101); 
+                approveParams.Add("@holdSignNumb", 0);
+                approveParams.Add("@nextSignNumb", 101);
                 approveParams.Add("@Variant22", string.Empty);
                 approveParams.Add("@Variant30", string.Empty);
                 approveParams.Add("@EntryID", "JB:005");
@@ -1327,7 +1323,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         {
             var rawData = await GetEContractRawDataAsync(OID);
 
-            if(rawData == null)
+            if (rawData == null)
             {
                 throw new Exception($"Không tìm thấy dữ liệu hợp đồng cho OID {OID}");
             }
@@ -1364,10 +1360,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             using var trans = conn.BeginTransaction();
             try
             {
-                
+
                 if (!string.IsNullOrEmpty(job.OID))
                 {
-                    await UploadFileAsync(job); 
+                    await UploadFileAsync(job);
                 }
                 else
                 {
@@ -1385,12 +1381,12 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     detailParams.Add("@InvcEnd", job.InvcEnd ?? 0);
                     detailParams.Add("@invcSample", job.invcSample ?? string.Empty);
                     detailParams.Add("@CmpnID", job.cmpnID ?? string.Empty);
-                    detailParams.Add("@OID", ""); 
+                    detailParams.Add("@OID", "");
 
                     await conn.ExecuteAsync("wspInsert_EContractJobs",
                         detailParams, transaction: trans, commandType: CommandType.StoredProcedure);
 
-                    trans.Commit(); 
+                    trans.Commit();
                 }
 
                 var resultList = await conn.QueryAsync<JobEntity>(
@@ -1398,7 +1394,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     new { OID = job.ReferenceID },
                     commandType: CommandType.StoredProcedure);
 
-                return resultList.LastOrDefault(); 
+                return resultList.LastOrDefault();
             }
             catch (Exception ex)
             {
@@ -1443,7 +1439,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             var files = await conn.QueryAsync<dynamic>(sql, new { OID = oid });
 
             var baseUrl = _configuration["FileConfig:BaseUrl"]; // https://api-erprc.win-tech.vn/uploads
-            return files.Select(f => new {
+            return files.Select(f => new
+            {
                 f.FileName,
                 f.Note,
                 ViewUrl = $"{baseUrl}/{f.RelativePath}"
@@ -1516,7 +1513,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
             var files = await conn.QueryAsync<dynamic>(sql, new { OID = oid });
 
-            return files.Select(f => new {
+            return files.Select(f => new
+            {
                 f.AttachID,
                 f.FileName,
                 f.Note,
@@ -1583,7 +1581,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
                 if (model.Details != null)
                 {
-                    int itemNo = 0; 
+                    int itemNo = 0;
                     foreach (var item in model.Details)
                     {
                         dt.Rows.Add(
@@ -1603,7 +1601,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                         item.InvcFrm,
                         item.InvcEnd,
                         item.InvcSample,
-                        item.ItemUnitName,  // itemUnitName
+                        item.ItemUnitName,  
                         0               // ItemPerBox
                     );
                     }
@@ -1623,10 +1621,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 p.Add("@CmpnAddress", model.MyCmpnAddress);
                 p.Add("@CmpnContactAddress", model.MyCmpnContactAddress ?? model.MyCmpnAddress);
                 p.Add("@CmpnMail", model.MyCmpnMail);
-                p.Add("@CmpnTel", model.MyCmpnTel);             
-                p.Add("@CmpnPeople_Sign", model.MyCmpnPeople_Sign);     
-                p.Add("@CmpnPosition_BySign", model.MyCmpnPosition_Sign);   
-                p.Add("@CmpnBankNumber", model.MyCmpnBankNumber);       
+                p.Add("@CmpnTel", model.MyCmpnTel);
+                p.Add("@CmpnPeople_Sign", model.MyCmpnPeople_Sign);
+                p.Add("@CmpnPosition_BySign", model.MyCmpnPosition_Sign);
+                p.Add("@CmpnBankNumber", model.MyCmpnBankNumber);
                 p.Add("@CmpnBankAddress", model.MyCmpnBankAddress);
 
 
@@ -1673,10 +1671,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
                 await connection.ExecuteAsync(
                     "[dbo].[sp_EContract_Insert_Basic]", p,
-                    transaction: transaction,                    
+                    transaction: transaction,
                     commandType: CommandType.StoredProcedure);
 
-                transaction.Commit();                            
+                transaction.Commit();
                 return true;
             }
             catch
@@ -1726,6 +1724,68 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 p);
 
             return result > 0;
+        }
+
+        public async Task<DeXuatCapTaiKhoanResult> DeXuatAsync(ProposeCreateAccount entity)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var param = new DynamicParameters();
+            param.Add("@OIDContract", entity.OIDContract);
+            param.Add("@CmpnID", entity.CmpnID);
+            param.Add("@Crt_User", entity.CrtUser);
+            param.Add("@MailAcc", entity.MailAcc);
+
+            IDictionary<string, object>? row = null;
+
+            using var multi = await con.QueryMultipleAsync(
+                "sp_DeXuatCapTaiKhoan",
+                param,
+                commandType: CommandType.StoredProcedure,
+                commandTimeout: 3600);
+
+            while (!multi.IsConsumed)
+            {
+                var rows = (await multi.ReadAsync()).ToList();
+                if (rows.Count == 0) continue;
+
+                var candidate = (IDictionary<string, object>)rows[0];
+
+                if (candidate.ContainsKey("OIDJob"))
+                {
+                    row = candidate;
+                    break;
+                }
+            }
+
+            if (row == null)
+            {
+                throw new InvalidOperationException(
+                    $"SP không trả về kết quả OIDJob. Kiểm tra OIDContract '{entity.OIDContract}'.");
+            }
+
+            var rowCI = new Dictionary<string, object>(row, StringComparer.OrdinalIgnoreCase);
+
+            string Get(string key) =>
+                rowCI.TryGetValue(key, out var val) ? val?.ToString() ?? "" : "";
+
+            // IsSuccess: 1 = thành công | 2 = đã tồn tại | 0 = lỗi
+            string isSuccessRaw = Get("IsSuccess");
+            int isSuccess = int.TryParse(isSuccessRaw, out var n) ? n : 0;
+
+            if (isSuccess == 0)
+            {
+                string spMessage = Get("Message");
+                if (string.IsNullOrEmpty(spMessage))
+                    spMessage = $"SP thất bại. Raw row: [{string.Join(", ", row.Select(kv => $"{kv.Key}={kv.Value}"))}]";
+                throw new InvalidOperationException(spMessage);
+            }
+
+            return new DeXuatCapTaiKhoanResult
+            {
+                OIDJob = Get("OIDJob"),
+                ReferenceInfo = Get("Message"),
+                IsAlreadyExists = isSuccess == 2
+            };
         }
     }
 }

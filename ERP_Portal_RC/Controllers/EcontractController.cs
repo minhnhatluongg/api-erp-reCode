@@ -601,6 +601,46 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.GetJobStatusAsync(referenceId, factorId, entryId);
             return StatusCode(result.StatusCode, result);
         }
+
+        [HttpPost("de-xuat")]
+        [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeXuat([FromBody] DeXuatCapTaiKhoanRequestDto request)
+        {
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userCode))
+            {
+                return Unauthorized(ApiResponse<DeXuatCapTaiKhoanResponseDto>.ErrorResponse(
+                    "Phiên làm việc hết hạn hoặc không tìm thấy thông tin người dùng.", statusCode: 401));
+            }
+            request.CrtUser = userCode;
+
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToList();
+                return BadRequest(ApiResponse<DeXuatCapTaiKhoanResponseDto>.ErrorResponse(
+                    "Dữ liệu không hợp lệ.", statusCode: 400, errors: errors));
+            }
+            try
+            {
+                var response = await _econtractService.DeXuatCapTaiKhoanAsync(request);
+
+                return response.Success
+                    ? Ok(response)
+                    : BadRequest(response);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    ApiResponse<DeXuatCapTaiKhoanResponseDto>.ErrorResponse(
+                        "Lỗi hệ thống.", statusCode: 500,
+                        errors: new List<string> { ex.Message }));
+            }
+        }
     }
 }
 

@@ -87,5 +87,22 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 param: parameters,
                 commandType: CommandType.StoredProcedure);
         }
+
+        public async Task<Dictionary<string, string>> GetLoginNameBatchAsync(IEnumerable<string> userCodes)
+        {
+            var codes = userCodes.Distinct().ToList();
+            if (codes.Count == 0) return new Dictionary<string, string>();
+            using var con = _dbConnectionFactory.GetConnection(BosConfigureDb);
+            var inClause = string.Join(",", codes.Select(c => $"'{c.Replace("'", "''")}'"));
+            var sql = $@"
+                SELECT UserCode, LoginName
+                FROM   bosConfigure.dbo.BosUser WITH (NOLOCK)
+                WHERE  UserCode IN ({inClause})";
+            var rows = await con.QueryAsync(sql);
+
+            return rows.ToDictionary(
+                r => (string)((IDictionary<string, object>)r)["UserCode"],
+                r => ((IDictionary<string, object>)r)["LoginName"]?.ToString() ?? "");
+        }
     }
 }
