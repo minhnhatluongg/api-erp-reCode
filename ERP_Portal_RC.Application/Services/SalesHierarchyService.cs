@@ -24,43 +24,39 @@ namespace ERP_Portal_RC.Application.Services
         public async Task<List<ManagerDto>> GetManagerTreeAsync(string clnID, bool isManager)
         {
             var rawData = await _salesHierarchyRepository.GetRawSalesTreeAsync(clnID);
-
-            var filteredData = isManager
-                ? rawData.Where(x => x.IsGroup)
-                : rawData;
+            var filteredData = isManager ? rawData.Where(x => x.IsGroup) : rawData;
             var processedList = filteredData
                 .GroupBy(x => x.ItemID)
                 .Select(g => g.First())
                 .ToList();
-            var map = processedList.ToDictionary(x => x.ItemID, x => new ManagerDto
+            var loginMap = await _salesHierarchyRepository
+                .GetLoginNameBatchAsync(processedList.Select(x => x.ItemID));
+            var map = processedList.ToDictionary(x => x.ItemID, x =>
             {
-                Id = x.ItemID,
-                Name = x.ItemName,
-                Level = x.LEVEL_VAL,
-                SortID = x.SortID,
-                IsGroup = x.IsGroup 
+                loginMap.TryGetValue(x.ItemID, out var loginName);
+                return new ManagerDto
+                {
+                    Id = x.ItemID,
+                    Name = x.ItemName,
+                    Level = x.LEVEL_VAL,
+                    SortID = x.SortID,
+                    IsGroup = x.IsGroup,
+                    LoginName = loginName ?? ""
+                };
             });
 
             var tree = new List<ManagerDto>();
-
             foreach (var item in processedList)
             {
                 var dto = map[item.ItemID];
-
                 string parentId = GetImmediateParentId(item.ParentIDSortID);
 
                 if (!string.IsNullOrEmpty(parentId) && map.ContainsKey(parentId))
-                {
                     map[parentId].Children.Add(dto);
-                }
                 else if (string.IsNullOrEmpty(item.PARENTID) || item.PARENTID == "*****")
-                {
                     tree.Add(dto);
-                }
                 else if (!map.ContainsKey(parentId))
-                {
                     tree.Add(dto);
-                }
             }
             return tree;
         }

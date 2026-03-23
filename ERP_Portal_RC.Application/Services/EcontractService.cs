@@ -1537,6 +1537,37 @@ namespace ERP_Portal_RC.Application.Services
         {
             return await _eContractRepository.CheckOrderBySaleAsync(cusTax, saleEmID);
         }
+
+        public async Task<ApiResponse<DeXuatCapTaiKhoanResponseDto>> DeXuatCapTaiKhoanAsync(DeXuatCapTaiKhoanRequestDto request)
+        {
+            try
+            {
+                var entity = new ProposeCreateAccount
+                {
+                    OIDContract = request.OIDContract,
+                    CmpnID = request.CmpnID,
+                    CrtUser = request.CrtUser,
+                    MailAcc = request.MailAcc
+                };
+                DeXuatCapTaiKhoanResult result = await _eContractRepository.DeXuatAsync(entity);
+                var data = new DeXuatCapTaiKhoanResponseDto
+                {
+                    OIDJob = result.OIDJob,
+                    ReferenceInfo = result.ReferenceInfo
+                };
+
+                string message = result.IsAlreadyExists
+                    ? "Yêu cầu cấp tài khoản đã được tạo trước đó."
+                    : "Đề xuất cấp tài khoản thành công. Job đã được trình ký (trạng thái 101).";
+                return ApiResponse<DeXuatCapTaiKhoanResponseDto>.SuccessResponse(data, message);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<DeXuatCapTaiKhoanResponseDto>.ErrorResponse(
+                    ex.Message,
+                    statusCode: 400);
+            }
+        }
     }
 }
 

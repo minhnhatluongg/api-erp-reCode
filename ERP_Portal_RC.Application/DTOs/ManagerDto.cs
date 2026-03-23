@@ -13,6 +13,7 @@ namespace ERP_Portal_RC.Application.DTOs
         public string Level { get; set; } = string.Empty;
         public string SortID { get; set; } = string.Empty;
         public bool IsGroup { get; set; }
+        public string LoginName { get; set; } = "";
         public List<ManagerDto> Children { get; set; } = new();
     }
 }

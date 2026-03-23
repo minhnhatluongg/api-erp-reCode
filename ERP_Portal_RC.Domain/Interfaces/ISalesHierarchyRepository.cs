@@ -12,5 +12,6 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<IEnumerable<EmployeeTreeItem>> GetRawSalesTreeAsync(string clnID);
         Task<string> RegisterSaleHierarchyAsync(SaleRegistrationModel request, string hardcodedAdminId);
         Task<string> CreateERPAccountOnlyAsync(string loginName, string password, string fullName, string email, string emplId);
+        Task<Dictionary<string, string>> GetLoginNameBatchAsync(IEnumerable<string> userCodes);
     }
 }
