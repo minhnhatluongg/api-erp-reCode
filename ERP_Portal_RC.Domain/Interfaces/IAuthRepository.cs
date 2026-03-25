@@ -24,5 +24,16 @@ namespace ERP_Portal_RC.Domain.Interfaces
 
         /// Xóa các token đã hết hạn
         Task<int> CleanupExpiredTokensAsync();
+
+        /// Đổi mật khẩu thông qua Stored Procedure
+        /// <returns>
+        ///  1  = thành công
+        ///  0  = mật khẩu cũ không đúng
+        /// -1  = user không tồn tại
+        /// -2  = tài khoản bị vô hiệu hóa
+        /// </returns>
+        Task<int> ChangePasswordAsync(string loginName, string hashedOldPassword, string hashedNewPassword);
+        /// Lấy thông tin user theo LoginName
+        Task<BosUser?> GetByLoginNameAsync(string loginName);
     }
 }

@@ -1,9 +1,11 @@
 using AutoMapper;
 using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.ChangePassword;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
 namespace ERP_Portal_RC.Application.Services
@@ -45,8 +47,11 @@ namespace ERP_Portal_RC.Application.Services
                     _logger.LogWarning("Login failed: User not found - {LoginName}", request.LoginName);
                     return null;
                 }
+
+                string plainPassword = Sha1.Decrypt(userOnAp.Password);
+
                 var encryptedPassword = Sha1.Encrypt(request.Password);
-                
+
                 if (userOnAp.Password != encryptedPassword)
                 {
                     _logger.LogWarning("Login failed: Invalid password - {LoginName}", request.LoginName);
@@ -66,26 +71,26 @@ namespace ERP_Portal_RC.Application.Services
 
                 // Map sang ApplicationUser
                 var user = new ApplicationUser
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        LoginName = userOnAp.LoginName ?? string.Empty,
-                        UserCode = userOnAp.UserCode,
-                        FullName = userOnAp.FullName ?? string.Empty,
-                        UserName = userOnAp.LoginName ?? string.Empty,
-                        Email = $"{userOnAp.Email}", 
-                        Password = userOnAp.Password ?? string.Empty,
-                        Grp_List = userOnAp.Grp_List ?? string.Empty,
-                        LanguageDefault = userOnAp.LanguageDefault ?? "VN",
-                        CmpnID = userOnAp.CmpnID_List ?? string.Empty,
-                        DefaultAppSite = defaultAppSite,
-                        OperDeptList = userOnAp.OperDeptList ?? "",
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    LoginName = userOnAp.LoginName ?? string.Empty,
+                    UserCode = userOnAp.UserCode,
+                    FullName = userOnAp.FullName ?? string.Empty,
+                    UserName = userOnAp.LoginName ?? string.Empty,
+                    Email = $"{userOnAp.Email}",
+                    Password = userOnAp.Password ?? string.Empty,
+                    Grp_List = userOnAp.Grp_List ?? string.Empty,
+                    LanguageDefault = userOnAp.LanguageDefault ?? "VN",
+                    CmpnID = userOnAp.CmpnID_List ?? string.Empty,
+                    DefaultAppSite = defaultAppSite,
+                    OperDeptList = userOnAp.OperDeptList ?? "",
                 };
 
                 var (accessToken, jwtId, expiresAt) = _tokenService.GenerateAccessToken(user);
                 var refreshToken = await _tokenService.GenerateAndSaveRefreshTokenAsync(user.Id, jwtId, ipAddress, userAgent);
 
                 var userDto = _mapper.Map<UserDto>(user);
-                userDto.DefaultAppSite = defaultAppSite; 
+                userDto.DefaultAppSite = defaultAppSite;
 
                 _logger.LogInformation("User {LoginName} logged in successfully", request.LoginName);
 
@@ -111,7 +116,7 @@ namespace ERP_Portal_RC.Application.Services
             {
                 // Validate access token (không cần check expiration)
                 var principal = _tokenService.GetPrincipalFromToken(request.AccessToken, validateLifetime: false);
-                
+
                 if (principal == null)
                 {
                     _logger.LogWarning("Refresh token failed: Invalid access token");
@@ -161,7 +166,7 @@ namespace ERP_Portal_RC.Application.Services
                 await _authRepository.UpdateRefreshTokenAsync(storedRefreshToken);
 
                 // Lấy user info từ database
-                var users = await _customStore.GetUserByLoginNameAsync(loginName,companyId);
+                var users = await _customStore.GetUserByLoginNameAsync(loginName, companyId);
                 var userOnAp = users.FirstOrDefault();
 
                 if (userOnAp == null)
@@ -178,7 +183,7 @@ namespace ERP_Portal_RC.Application.Services
                     FullName = userOnAp.FullName ?? string.Empty,
                     UserName = userOnAp.FullName,
                     Email = $"{userOnAp.Email}",
-                    OperDeptList = userOnAp.OperDeptList ?? string.Empty 
+                    OperDeptList = userOnAp.OperDeptList ?? string.Empty
                 };
 
                 // Generate new tokens
@@ -209,7 +214,7 @@ namespace ERP_Portal_RC.Application.Services
             try
             {
                 var storedToken = await _authRepository.GetRefreshTokenAsync(refreshToken);
-                
+
                 if (storedToken == null)
                 {
                     return false;
@@ -249,7 +254,7 @@ namespace ERP_Portal_RC.Application.Services
             {
                 var principal = _tokenService.GetPrincipalFromToken(accessToken, validateLifetime: true);
                 if (principal == null) return null;
-                
+
                 var cmpnId = principal.FindFirst("CmpnID")?.Value ?? "00";
 
                 if (principal == null)
@@ -258,7 +263,7 @@ namespace ERP_Portal_RC.Application.Services
                 }
 
                 var loginName = principal.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value;
-                
+
                 if (string.IsNullOrEmpty(loginName))
                 {
                     return null;
@@ -309,5 +314,46 @@ namespace ERP_Portal_RC.Application.Services
             var result = await _customStore.CheckUserByLoginNameAsync(loginName);
             return result.FirstOrDefault() == 1;
         }
+
+        public async Task<ChangePasswordResponseDto> ChangePasswordAsync(ChangePasswordDto request)
+        {
+            // ── 1. Validate mật khẩu mới ≠ mật khẩu cũ ─────────────────────
+            if (request.OldPassword == request.NewPassword)
+            {
+                return Fail("Mật khẩu mới không được trùng với mật khẩu cũ.");
+            }
+
+            // ── 2. Hash cả hai mật khẩu trước khi gửi xuống DB ───────────────
+            string hashedOld = Sha1.Encrypt(request.OldPassword);
+            string hashedNew = Sha1.Encrypt(request.NewPassword);
+
+            // ── 3. Gọi Repository (Stored Procedure) ─────────────────────────
+            int result;
+            try
+            {
+                result = await _authRepository.ChangePasswordAsync(
+                    request.LoginName, hashedOld, hashedNew);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi đổi mật khẩu cho user {LoginName}", request.LoginName);
+                return Fail("Lỗi máy chủ. Vui lòng thử lại sau.");
+            }
+
+            // ── 4. Map mã trả về từ SP sang response ─────────────────────────
+            return result switch
+            {
+                1 => Ok("Đổi mật khẩu thành công."),
+                0 => Fail("Mật khẩu cũ không đúng."),
+                -1 => Fail("Tài khoản không tồn tại."),
+                -2 => Fail("Tài khoản đã bị vô hiệu hóa."),
+                _ => Fail("Đã xảy ra lỗi không xác định.")
+            };
+        }
+        private static ChangePasswordResponseDto Ok(string message) =>
+            new() { Success = true, Message = message };
+
+        private static ChangePasswordResponseDto Fail(string message) =>
+            new() { Success = false, Message = message };
     }
 }

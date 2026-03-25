@@ -1,3 +1,4 @@
+using Dapper;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
 using System.Data;
@@ -9,6 +10,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
     {
         private readonly IDbConnectionFactory _dbConnectionFactory;
         private const string BosOnlineDb = "BosOnline";
+        private const string BosConfigure = "BosConfigure";
 
         public AuthRepository(IDbConnectionFactory dbConnectionFactory)
         {
@@ -283,6 +285,38 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     _dbConnectionFactory.CloseConnection(connection);
                 }
             }
+        }
+
+        public async Task<int> ChangePasswordAsync(string loginName, string hashedOldPassword, string hashedNewPassword)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosConfigure);
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@LoginName", loginName, DbType.String, ParameterDirection.Input);
+            parameters.Add("@OldPassword", hashedOldPassword, DbType.String, ParameterDirection.Input);
+            parameters.Add("@NewPassword", hashedNewPassword, DbType.String, ParameterDirection.Input);
+            parameters.Add("@ResultCode", dbType: DbType.Int32, direction: ParameterDirection.Output);
+
+            await conn.ExecuteAsync(
+                "dbo.sp_ChangeUserPassword",
+                parameters,
+                commandType: CommandType.StoredProcedure);
+
+            return parameters.Get<int>("@ResultCode");
+        }
+
+        public async Task<BosUser?> GetByLoginNameAsync(string loginName)
+        {
+            const string sql = @"
+                SELECT TOP 1
+                    UserCode, LoginName, Email, [Password], PasswordEx,
+                    DName, FullName, IsAcctive, RsDonChangePass,
+                    PermissionLevels, DeActiveDate, IsDelete
+                FROM [bosConfiguration].[dbo].[bosUser]
+                WHERE LoginName = @LoginName";
+
+            using var conn = _dbConnectionFactory.GetConnection(BosConfigure);
+            return await conn.QueryFirstOrDefaultAsync<BosUser>(sql, new { LoginName = loginName });
         }
     }
 }

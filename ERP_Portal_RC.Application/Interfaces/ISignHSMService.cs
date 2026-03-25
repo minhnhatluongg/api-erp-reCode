@@ -1,4 +1,5 @@
-﻿using ERP_Portal_RC.Domain.Common;
+﻿using ERP_Portal_RC.Application.DTOs.SignHSM;
+using ERP_Portal_RC.Domain.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;

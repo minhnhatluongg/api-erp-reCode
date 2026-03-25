@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.Count_Invoice;
 using ERP_Portal_RC.Application.DTOs.Integration_Incom;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
@@ -74,5 +75,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID);
         Task<ApiResponse<DeXuatCapTaiKhoanResponseDto>> DeXuatCapTaiKhoanAsync(
             DeXuatCapTaiKhoanRequestDto request);
+
+        Task<ApiResponse<InvCounterResponseDto>> GetInvCounterByMSTAsync(InvCounterRequestDto request);
     } 
 }

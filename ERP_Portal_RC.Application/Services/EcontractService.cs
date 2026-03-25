@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.Count_Invoice;
 using ERP_Portal_RC.Application.DTOs.Integration_Incom;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
@@ -31,11 +32,13 @@ namespace ERP_Portal_RC.Application.Services
         private readonly IMailService _mailService;
         private readonly IFileStorageService _fileStorageService;
         private readonly FileConfig _fileConfig;
+        private readonly IConnectionRepository _connectionRepo;
         private readonly IConfiguration _configuration;
 
         public EcontractService(IEContractRepository econtractRepo, 
             IMailService mailService, 
             IFileStorageService fileStorageService,
+            IConnectionRepository connectionRepository,
             IConfiguration configuration,
             IOptions<FileConfig> fileConfigOptions)
         {
@@ -43,6 +46,7 @@ namespace ERP_Portal_RC.Application.Services
             _mailService = mailService;
             _fileStorageService = fileStorageService;
             _configuration = configuration;
+            _connectionRepo = connectionRepository;
             _fileConfig = fileConfigOptions.Value;
         }
         public async Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string groupList, string userCode)
@@ -1071,18 +1075,20 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
-        public async Task<ApiResponse<List<string>>> UploadContractFilesAsync(IFormFileCollection files, string oid)
+        public async Task<ApiResponse<List<string>>> UploadContractFilesAsync(
+    IFormFileCollection files, string oid)
         {
             var fileLinks = new List<string>();
-            string baseUrl = _configuration["FileConfig:BaseUrl"]; // Ví dụ: https://api-erprc.win-tech.vn
+            string baseUrl = _configuration["FileConfig:BaseUrl"];
 
             foreach (var file in files)
             {
                 string relativePath = await _fileStorageService.UploadFileAsync(file, oid);
-
                 if (relativePath != null)
                 {
-                    string fullUrl = $"{baseUrl.TrimEnd('/')}/{relativePath.TrimStart('/')}";
+                    string normalizedPath = relativePath.TrimStart('/')
+                                                       .Replace("uploads/", "");
+                    string fullUrl = $"{baseUrl.TrimEnd('/')}/files/{normalizedPath}";
                     fileLinks.Add(fullUrl);
                 }
             }
@@ -1567,6 +1573,48 @@ namespace ERP_Portal_RC.Application.Services
                     ex.Message,
                     statusCode: 400);
             }
+        }
+
+        public async Task<ApiResponse<InvCounterResponseDto>> GetInvCounterByMSTAsync(
+            InvCounterRequestDto request)
+        {
+            // ── 1. Tìm server chứa MST ───────────────────────────────────────
+            var serverIp = _connectionRepo.GetIPServerByMST(request.MST, null, "EVAT");
+            if (string.IsNullOrEmpty(serverIp))
+                return ApiResponse<InvCounterResponseDto>.ErrorResponse(
+                    $"Không tìm thấy server cho MST: {request.MST}", 404);
+
+            // ── 2. Lấy connection string đến server đó ───────────────────────
+            var connStr = _connectionRepo.GetCnServerByMST(request.MST, null, "EVAT");
+            if (string.IsNullOrEmpty(connStr))
+                return ApiResponse<InvCounterResponseDto>.ErrorResponse(
+                    $"Không thể kết nối server cho MST: {request.MST}", 500);
+
+            var merchantId = await _eContractRepository.GetMerchantIdAsync(connStr, request.MST);
+            if (string.IsNullOrEmpty(merchantId))
+                return ApiResponse<InvCounterResponseDto>.ErrorResponse(
+                    $"Không tìm thấy MerchantId cho MST: {request.MST}", 404);
+
+            var frmDate = new DateTime(1990, 1, 1);  
+            var toDate = DateTime.Today;
+
+            var counter = await _eContractRepository.GetInvCounterAsync(connStr, merchantId, frmDate, toDate);
+            if (counter == null)
+                return ApiResponse<InvCounterResponseDto>.ErrorResponse(
+                    "Không lấy được dữ liệu thống kê hóa đơn.", 500);
+
+            var data = new InvCounterResponseDto
+            {
+                MST = request.MST,
+                MerchantId = merchantId,
+                Server = serverIp,
+                Used = counter.Used,
+                Total = counter.Total,
+                Remaining = counter.Remaining
+            };
+
+            return ApiResponse<InvCounterResponseDto>.SuccessResponse(
+                data, "Lấy thống kê hóa đơn thành công.");
         }
     }
 }

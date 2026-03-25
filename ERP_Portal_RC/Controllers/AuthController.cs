@@ -1,4 +1,5 @@
 using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.ChangePassword;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
@@ -322,6 +323,40 @@ namespace ERP_Portal_RC.Controllers
                     $"Lỗi hệ thống khi kiểm tra tài khoản: {ex.Message}",
                     500));
             }
+        }
+        [HttpPost("change-password")]
+        [ProducesResponseType(typeof(ChangePasswordResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ChangePasswordResponseDto), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto request)
+        {
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage);
+
+                return BadRequest(new ChangePasswordResponseDto
+                {
+                    Success = false,
+                    Message = string.Join(" | ", errors)
+                });
+            }
+
+            _logger.LogInformation("ChangePassword request cho user: {LoginName}", request.LoginName);
+
+            var response = await _authService.ChangePasswordAsync(request);
+
+            if (!response.Success)
+            {
+                return response.Message switch
+                {
+                    var m when m.Contains("không tồn tại") => NotFound(response),
+                    var m when m.Contains("vô hiệu hóa") => StatusCode(StatusCodes.Status403Forbidden, response),
+                    var m when m.Contains("không đúng") => Unauthorized(response),
+                    _ => BadRequest(response)
+                };
+            }
+            return Ok(response);
         }
     }
 }

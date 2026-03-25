@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Reflection;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -141,6 +142,11 @@ builder.Services.AddSwaggerGen(options =>
             Email = "cusocisme@gmail.com or minhnhatluongwork@gmail.com"
         }
     });
+    options.EnableAnnotations();
+
+    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath)) options.IncludeXmlComments(xmlPath);
 
     // Thêm authorization header
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -185,6 +191,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+//Enable Files
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(@"D:\Attachments"),
+    RequestPath = "/uploads",
+    ContentTypeProvider = provider
+});
+// Enable Session
+app.UseSession();
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -216,15 +232,7 @@ else
 app.UseHttpsRedirection();
 
 app.UseCors("AllowAll");
-//Enable Files
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(@"D:\Attachments"),
-    RequestPath = "/uploads",
-    ContentTypeProvider = provider
-});
-// Enable Session
-app.UseSession();
+
 
 // Enable Authentication & Authorization
 app.UseAuthentication();
