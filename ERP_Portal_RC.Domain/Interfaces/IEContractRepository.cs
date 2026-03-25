@@ -89,5 +89,14 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<OwnerContract> GetOwnerContractAsync(string companyId = "26");
         Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID);
         Task<DeXuatCapTaiKhoanResult> DeXuatAsync(ProposeCreateAccount entity);
+        /// Lấy MerchantId từ EVat_CompanyInfo theo MST
+        Task<string?> GetMerchantIdAsync(string connectionString, string mst);
+
+        /// Gọi SP W_Status_InvCounter để lấy thống kê HĐ
+        Task<InvCounterResult?> GetInvCounterAsync(
+            string connectionString,
+            string merchantId,
+            DateTime frmDate,
+            DateTime toDate);
     }
 }

@@ -949,7 +949,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             using var conn = _dbConnectionFactory.GetConnection(BosDocument);
             conn.Open();
 
-            const string sQuery = @" INSERT INTO INSERT INTO [BosDocument].[dbo].[DocAttachfile]
+            const string sQuery = @" INSERT INTO [BosDocument].[dbo].[DocAttachfile]
                                         (AttachType, 
                                         AttachNote, 
                                         AttachDate, 
@@ -1786,6 +1786,36 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 ReferenceInfo = Get("Message"),
                 IsAlreadyExists = isSuccess == 2
             };
+        }
+
+        public async Task<string?> GetMerchantIdAsync(string connectionString, string mst)
+        {
+            const string sql = @"
+                SELECT TOP 1 MerchantId
+                FROM BosEVAT..EVat_CompanyInfo WITH (NOLOCK)
+                WHERE TaxNumber = @TaxNumber";
+
+            using var conn = new SqlConnection(connectionString);
+            var result = await conn.QueryFirstOrDefaultAsync<string>(
+                sql, new { TaxNumber = mst });
+            return result;
+        }
+
+        public async Task<InvCounterResult?> GetInvCounterAsync(string connectionString, string merchantId, DateTime frmDate, DateTime toDate)
+        {
+            using var conn = new SqlConnection(connectionString);
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@cmpnID", merchantId, DbType.String, ParameterDirection.Input);
+            parameters.Add("@frmDate", frmDate.Date, DbType.Date, ParameterDirection.Input);
+            parameters.Add("@toDate", toDate.Date, DbType.Date, ParameterDirection.Input);
+
+            var result = await conn.QueryFirstOrDefaultAsync<InvCounterResult>(
+                "BosEVAT..W_Status_InvCounter",
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                commandTimeout: 120); 
+            return result;
         }
     }
 }

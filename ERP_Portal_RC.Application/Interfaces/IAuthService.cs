@@ -1,4 +1,5 @@
 using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.ChangePassword;
 using ERP_Portal_RC.Domain.Entities;
 
 namespace ERP_Portal_RC.Application.Interfaces
@@ -19,5 +20,8 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ApplicationUser?> GetUserFromTokenAsync(string accessToken);
         Task<int> CleanupTokensAsync();
         Task<bool> IsCheckUserExistsAsync(string loginName);
+        
+
+        Task<ChangePasswordResponseDto> ChangePasswordAsync(ChangePasswordDto request);
     }
 }
