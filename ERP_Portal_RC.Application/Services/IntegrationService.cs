@@ -10,7 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ERP_Portal_RC.Application.DTOs
+namespace ERP_Portal_RC.Application.Services
 {
     public class IntegrationService : IIntegrationService
     {
@@ -34,7 +34,7 @@ namespace ERP_Portal_RC.Application.DTOs
             _contractService = econtractService;
         }
         public async Task<ApiResponse<IntegrationResult>> ProcessEContractIntegrationAsync(
-    Integration_Incom.EContractIntegrationRequestDto model, string crtUser)
+        EContractIntegrationRequestDto model, string crtUser)
         {
             var oid = model?.OrderOID ?? "Unknown OID";
             await _logger.LogInfoAsync(oid, "Bắt đầu xử lý EContract", new { model?.CusTax, model?.CusName, crtUser });
