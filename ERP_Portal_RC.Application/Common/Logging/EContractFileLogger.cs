@@ -12,52 +12,85 @@ namespace ERP_Portal_RC.Domain.Common.Logging
     {
         private readonly string _logDirectory;
         private readonly int _retentionDays;
+        private readonly string _filePrefix;
 
-        public EContractFileLogger(IConfiguration configuration)
+        private static readonly SemaphoreSlim _fileLock = new(1, 1);
+
+        public EContractFileLogger(IConfiguration configuration, string filePrefix = "")
         {
+            _filePrefix = filePrefix;
+
             _logDirectory = configuration["EContractLogConfig:LogPath"]
                          ?? Path.Combine(AppContext.BaseDirectory, "Logs", "EContract");
-            _retentionDays = int.TryParse(configuration["EContractLogConfig:RetentionDays"], out var days)
-                             ? days : 14;
+
+            _retentionDays = int.TryParse(
+                configuration["EContractLogConfig:RetentionDays"], out var days)
+                ? days : 14;
 
             Directory.CreateDirectory(_logDirectory);
         }
 
         public async Task LogAsync(string level, string orderOid, string message, object? data = null)
         {
-            // Xóa log cũ hơn 14 ngày
             CleanOldLogs();
 
-            var logFile = Path.Combine(_logDirectory, $"{DateTime.Now:yyyy-MM-dd}.log");
-            var logEntry = new StringBuilder();
+            var logFile = BuildLogFilePath();
 
-            logEntry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{level}] OID: {orderOid}");
-            logEntry.AppendLine($"  Message : {message}");
+            var entry = new StringBuilder();
+            entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{level}] OID: {orderOid}");
+            entry.AppendLine($"  Message : {message}");
 
-            if (data != null)
-                logEntry.AppendLine($"  Data    : {JsonSerializer.Serialize(data)}");
+            if (data is not null)
+            {
+                var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+                entry.AppendLine($"  Data    : {json}");
+            }
 
-            logEntry.AppendLine(new string('-', 80));
+            entry.AppendLine(new string('-', 80));
 
-            await File.AppendAllTextAsync(logFile, logEntry.ToString());
+            await _fileLock.WaitAsync();
+            try
+            {
+                await File.AppendAllTextAsync(logFile, entry.ToString());
+            }
+            finally
+            {
+                _fileLock.Release();
+            }
         }
 
         public Task LogInfoAsync(string orderOid, string message, object? data = null)
-            => LogAsync("INFO", orderOid, message, data);
-
+        => LogAsync("INFO", orderOid, message, data);
         public Task LogErrorAsync(string orderOid, string message, object? data = null)
             => LogAsync("ERROR", orderOid, message, data);
+        public Task LogWarnAsync(string orderOid, string message, object? data = null)
+            => LogAsync("WARN", orderOid, message, data);
 
         private void CleanOldLogs()
         {
             var cutoff = DateTime.Now.AddDays(-_retentionDays);
-            var oldFiles = Directory.GetFiles(_logDirectory, "*.log")
+
+            var pattern = string.IsNullOrWhiteSpace(_filePrefix)
+                ? "*.log"
+                : $"{_filePrefix}_*.log";
+
+            var oldFiles = Directory.GetFiles(_logDirectory, pattern)
                 .Where(f => File.GetCreationTime(f) < cutoff);
 
             foreach (var file in oldFiles)
             {
-                try { File.Delete(file); } catch { }
+                try { File.Delete(file); }
+                catch { /* */ }
             }
+        }
+        private string BuildLogFilePath()
+        {
+            var datePart = DateTime.Now.ToString("yyyy-MM-dd");
+            var fileName = string.IsNullOrWhiteSpace(_filePrefix)
+                ? $"{datePart}.log"
+                : $"{_filePrefix}_{datePart}.log";
+
+            return Path.Combine(_logDirectory, fileName);
         }
     }
 }

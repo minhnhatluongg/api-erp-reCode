@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
 
@@ -25,7 +26,11 @@ builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHostedService<TokenCleanupWorker>();
 builder.Services.AddSingleton<EContractFileLogger>();
-
+builder.Services.AddKeyedScoped<EContractFileLogger>("InvoiceLogger", (sp, _) =>
+    new EContractFileLogger(
+        configuration: builder.Configuration,
+        filePrefix: "Invoice_craft"
+    ));
 //Config upload file
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".xslt"] = "text/xml";
@@ -50,6 +55,31 @@ builder.Services.AddAutoMapper(new[] {
     typeof(MenuMappingProfile).Assembly,
     typeof(TechnicalMappingProfile).Assembly
 });
+//HTTPS config
+
+// ── THÊM: HttpClient cho Invoice module
+builder.Services.AddHttpClient("WinInvoiceClient", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["WinInvoice:BaseUrl"]!);
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Accept.Add(
+        new MediaTypeWithQualityHeaderValue("application/json"));
+
+    var credentials = Convert.ToBase64String(
+        Encoding.UTF8.GetBytes(
+            $"{builder.Configuration["WinInvoice:ClientId"]}:{builder.Configuration["WinInvoice:ClientSecret"]}"));
+    client.DefaultRequestHeaders.Authorization =
+        new AuthenticationHeaderValue("Basic", credentials);
+});
+
+builder.Services.AddHttpClient("ERPPortalClient", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["ERPPortal:BaseUrl"]!);
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Accept.Add(
+        new MediaTypeWithQualityHeaderValue("application/json"));
+});
+
 // Đăng ký cấu hình FileConfig
 builder.Services.Configure<FileConfig>(builder.Configuration.GetSection("FileConfig"));
 // Đăng ký Application Services
@@ -69,6 +99,7 @@ builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IIntegrationService, IntegrationService>();
 builder.Services.AddScoped<ICapTaiKhoanService, CreateAccountService>();
 builder.Services.AddScoped<ISignHSMService, SignHSMService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -88,6 +119,7 @@ builder.Services.AddScoped<IEvatRepository, EvatRepository>();
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<ICreateAccountRepository, CapTaiKhoanRepository>();
 builder.Services.AddScoped<ISignHSMRepository, SignHSMRepository>();
+builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext
