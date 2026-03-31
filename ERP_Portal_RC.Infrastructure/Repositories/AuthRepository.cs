@@ -3,18 +3,22 @@ using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
 using System.Data;
 using System.Data.SqlClient;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace ERP_Portal_RC.Infrastructure.Repositories
 {
     public class AuthRepository : IAuthRepository
     {
         private readonly IDbConnectionFactory _dbConnectionFactory;
+        private readonly HttpClient _hrAccountClient;
         private const string BosOnlineDb = "BosOnline";
         private const string BosConfigure = "BosConfigure";
 
-        public AuthRepository(IDbConnectionFactory dbConnectionFactory)
+        public AuthRepository(IDbConnectionFactory dbConnectionFactory, IHttpClientFactory httpClientFactory)
         {
             _dbConnectionFactory = dbConnectionFactory;
+            _hrAccountClient = httpClientFactory.CreateClient("HRAccountClient");
         }
 
         public async Task<RefreshToken> AddRefreshTokenAsync(RefreshToken refreshToken)
@@ -317,6 +321,27 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
             using var conn = _dbConnectionFactory.GetConnection(BosConfigure);
             return await conn.QueryFirstOrDefaultAsync<BosUser>(sql, new { LoginName = loginName });
+        }
+
+        public async Task<(bool Success, string? ErrorMessage)> SyncPasswordToHRAsync(string loginName, string encryptedNewPassword)
+        {
+            const string endpoint = "/api/v1/hr/account-requests/sync-password";
+
+            var payload = new
+            {
+                username = loginName,
+                new_win_pass = encryptedNewPassword
+            };
+
+            var httpResponse = await _hrAccountClient.PostAsJsonAsync(endpoint, payload);
+            var rawJson = await httpResponse.Content.ReadAsStringAsync();
+
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                return (false, $"HTTP {(int)httpResponse.StatusCode}: {rawJson}");
+            }
+
+            return (true, null);
         }
     }
 }

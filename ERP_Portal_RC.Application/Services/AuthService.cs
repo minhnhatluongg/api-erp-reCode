@@ -341,13 +341,41 @@ namespace ERP_Portal_RC.Application.Services
             }
 
             // ── 4. Map mã trả về từ SP sang response ─────────────────────────
-            return result switch
+            if (result != 1)
             {
-                1 => Ok("Đổi mật khẩu thành công."),
-                0 => Fail("Mật khẩu cũ không đúng."),
-                -1 => Fail("Tài khoản không tồn tại."),
-                -2 => Fail("Tài khoản đã bị vô hiệu hóa."),
-                _ => Fail("Đã xảy ra lỗi không xác định.")
+                return result switch
+                {
+                    0 => Fail("Mật khẩu cũ không đúng."),
+                    -1 => Fail("Tài khoản không tồn tại."),
+                    -2 => Fail("Tài khoản đã bị vô hiệu hóa."),
+                    _ => Fail("Đã xảy ra lỗi không xác định.")
+                };
+            }
+
+            // ── 5. Đồng bộ mật khẩu mới sang hệ thống HR bên ngoài ─────────
+            string? syncWarning = null;
+            try
+            {
+                var (success, errorMessage) = await _authRepository.SyncPasswordToHRAsync(
+                    request.LoginName, hashedNew);
+
+                if (!success)
+                {
+                    syncWarning = $"Đồng bộ mật khẩu sang hệ thống ngoài thất bại: {errorMessage}";
+                    _logger.LogWarning("Sync password to HR failed for {LoginName}: {Error}", request.LoginName, errorMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                syncWarning = $"Đồng bộ mật khẩu sang hệ thống ngoài thất bại: {ex.Message}";
+                _logger.LogWarning(ex, "Sync password to HR exception for {LoginName}", request.LoginName);
+            }
+
+            return new ChangePasswordResponseDto
+            {
+                Success = true,
+                Message = "Đổi mật khẩu thành công.",
+                ExternalSyncWarning = syncWarning
             };
         }
         private static ChangePasswordResponseDto Ok(string message) =>

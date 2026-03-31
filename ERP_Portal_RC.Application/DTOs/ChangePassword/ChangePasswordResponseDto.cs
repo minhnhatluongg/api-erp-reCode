@@ -10,5 +10,6 @@ namespace ERP_Portal_RC.Application.DTOs.ChangePassword
     {
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
+        public string? ExternalSyncWarning { get; set; }
     }
 }

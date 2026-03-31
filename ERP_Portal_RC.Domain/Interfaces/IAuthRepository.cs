@@ -35,5 +35,10 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<int> ChangePasswordAsync(string loginName, string hashedOldPassword, string hashedNewPassword);
         /// Lấy thông tin user theo LoginName
         Task<BosUser?> GetByLoginNameAsync(string loginName);
+
+        /// <summary>
+        /// Đồng bộ mật khẩu mới sang hệ thống HR bên ngoài.
+        /// </summary>
+        Task<(bool Success, string? ErrorMessage)> SyncPasswordToHRAsync(string loginName, string encryptedNewPassword);
     }
 }
