@@ -80,6 +80,15 @@ builder.Services.AddHttpClient("ERPPortalClient", client =>
         new MediaTypeWithQualityHeaderValue("application/json"));
 });
 
+builder.Services.AddHttpClient("HRAccountClient", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["HRAccountApi:BaseUrl"]!);
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Accept.Add(
+        new MediaTypeWithQualityHeaderValue("application/json"));
+    client.DefaultRequestHeaders.Add("X-API-Key", builder.Configuration["HRAccountApi:ApiKey"]);
+});
+
 // Đăng ký cấu hình FileConfig
 builder.Services.Configure<FileConfig>(builder.Configuration.GetSection("FileConfig"));
 // Đăng ký Application Services

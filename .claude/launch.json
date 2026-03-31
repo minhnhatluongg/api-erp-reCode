@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "erp-portal-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "ERP_Portal_RC"],
+      "port": 5047
+    }
+  ]
+}

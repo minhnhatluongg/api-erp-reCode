@@ -7,8 +7,10 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace ERP_Portal_RC.Infrastructure.Repositories
@@ -16,12 +18,20 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
     public class SalesHierarchyRepository : ISalesHierarchyRepository
     {
         private readonly IDbConnectionFactory _dbConnectionFactory;
+        private readonly HttpClient _hrAccountClient;
         private const string bosHumanRs = "BosHumanResource";
         private const string BosConfigureDb = "BosConfigure";
 
-        public SalesHierarchyRepository(IDbConnectionFactory dbConnectionFactory)
+        private static readonly JsonSerializerOptions _jsonOptions = new()
+        {
+            PropertyNameCaseInsensitive = true,
+            WriteIndented = false
+        };
+
+        public SalesHierarchyRepository(IDbConnectionFactory dbConnectionFactory, IHttpClientFactory httpClientFactory)
         {
             _dbConnectionFactory = dbConnectionFactory;
+            _hrAccountClient = httpClientFactory.CreateClient("HRAccountClient");
         }
 
         public async Task<IEnumerable<EmployeeTreeItem>> GetRawSalesTreeAsync(string clnID)
@@ -103,6 +113,33 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return rows.ToDictionary(
                 r => (string)((IDictionary<string, object>)r)["UserCode"],
                 r => ((IDictionary<string, object>)r)["LoginName"]?.ToString() ?? "");
+        }
+
+        public async Task<(bool Success, string? ErrorMessage)> CreateHRAccountAsync(
+            string fullName, string email, string phone, string username, string password, string winId)
+        {
+            const string endpoint = "/api/v1/hr/account-requests/submit";
+
+            var payload = new
+            {
+                full_name = fullName,
+                email = email,
+                phone = phone ?? "",
+                username = username,
+                win_pass = Convert.ToBase64String(Encoding.UTF8.GetBytes(password)),
+                win_id = winId,
+                source_ref = $"ERP-{winId}"
+            };
+
+            var httpResponse = await _hrAccountClient.PostAsJsonAsync(endpoint, payload, _jsonOptions);
+            var rawJson = await httpResponse.Content.ReadAsStringAsync();
+
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                return (false, $"HTTP {(int)httpResponse.StatusCode}: {rawJson}");
+            }
+
+            return (true, null);
         }
     }
 }

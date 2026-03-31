@@ -8,8 +8,9 @@ namespace ERP_Portal_RC.Application.DTOs
 {
     public class RegistrationResultDto
     {
-        public string NewEmployeeID { get; set; }  
-        public string? NewUserCode { get; set; }   
+        public string NewEmployeeID { get; set; }
+        public string? NewUserCode { get; set; }
         public string? CodeLogin { get; set; }
+        public string? ExternalApiWarning { get; set; }
     }
 }
