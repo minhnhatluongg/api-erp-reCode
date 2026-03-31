@@ -17,6 +17,7 @@ namespace ERP_Portal_RC.Domain.Entities
         public string SoCMND { get; set; }
 
         public string? PsID { get; set; }
+        public string? Phone { get; set; }
         public bool IsCreateAccount { get; set; } 
         public string? LoginName { get; set; }
         public string? Password { get; set; }

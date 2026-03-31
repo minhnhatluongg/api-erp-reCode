@@ -100,11 +100,37 @@ namespace ERP_Portal_RC.Application.Services
                 await _customStore.AddUserToGroup(newUserCode);
             }
 
+            // Gọi API tạo TK trên hệ thống bên ngoài
+            string? externalWarning = null;
+            if (request.IsCreateAccount)
+            {
+                try
+                {
+                    var (success, errorMessage) = await _salesHierarchyRepository.CreateHRAccountAsync(
+                        request.FullName!,
+                        request.Email!,
+                        request.Phone ?? "",
+                        request.LoginName!,
+                        request.Password!,
+                        newEmplId);
+
+                    if (!success)
+                    {
+                        externalWarning = $"Tạo TK hệ thống ngoài thất bại: {errorMessage}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    externalWarning = $"Tạo TK hệ thống ngoài thất bại: {ex.Message}";
+                }
+            }
+
             return new RegistrationResultDto
             {
                 NewEmployeeID = newEmplId,
                 NewUserCode = newUserCode,
                 CodeLogin = request.RegistrationCode,
+                ExternalApiWarning = externalWarning,
             };
         }
 

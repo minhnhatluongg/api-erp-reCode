@@ -602,7 +602,7 @@ namespace API.ERP_Portal_RC.Controllers
             return StatusCode(result.StatusCode, result);
         }
 
-        [HttpPost("de-xuat")]
+        [HttpPost("de-xuat-captk")]
         [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status500InternalServerError)]
