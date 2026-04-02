@@ -11,7 +11,14 @@ namespace ERP_Portal_RC.Domain.Interfaces
     public interface IEContractRepository
     {
         Task<DSMenuViewModel> GetDSMenuByID(string loginName, string grpCode);
-        Task<ListEcontractViewModel> Search(string search, string crtUser, string dateStart, string dateEnd);
+        Task<(List<EContract_Monitor> Data, List<SubEmpl> Employees, int Total)> Search(
+            string search,
+            string crtUser,
+            string dateStart,
+            string dateEnd,
+            int? status,        
+            int pageNumber,
+            int pageSize);
         Task<ListEcontractViewModel> GetAllList(string crtUser, string dateStart, string dateEnd);
         Task<ListEcontractViewModel> CountList(string crtUser, string dateStart, string dateEnd);
         Task CreateLog(string message, string userCode);
@@ -98,5 +105,6 @@ namespace ERP_Portal_RC.Domain.Interfaces
             string merchantId,
             DateTime frmDate,
             DateTime toDate);
+        Task<IEnumerable<EContractWaiting>> GetRawList101Async(string frmDate, string endDate);
     }
 }

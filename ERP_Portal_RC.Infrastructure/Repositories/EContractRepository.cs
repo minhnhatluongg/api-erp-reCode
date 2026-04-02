@@ -93,29 +93,40 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return await _dSign.GetDSMenuByID(loginName, grpCode);
         }
 
-        public async
-            Task<ListEcontractViewModel> Search(string search, string crtUser, string dateStart, string dateEnd)
+        public async Task<(List<EContract_Monitor> Data, List<SubEmpl> Employees, int Total)> Search(
+    string search, string crtUser, string dateStart, string dateEnd,
+    int? status, int pageNumber, int pageSize)
         {
-            if (search == "CÔNG TY TNHH WIN TECH SOLUTION") search = "WIN TECH";
-            if (search == "CÔNG TY TNHH WIN ONLINE MEDIA") search = "WIN ONLINE";
-
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
             var parameters = new DynamicParameters();
-            parameters.Add("@strSearch", search);
+            parameters.Add("@strSearch", search?.Trim());
             parameters.Add("@CrtUser", crtUser);
             parameters.Add("@Frm_date", dateStart);
             parameters.Add("@End_date", dateEnd);
-            var model = new ListEcontractViewModel();
-            var result = await conn.QueryMultipleAsync("wspList_EContracts_Search_test", parameters, commandType: CommandType.StoredProcedure);
+            parameters.Add("@Status", status);
+            parameters.Add("@PageNumber", pageNumber > 0 ? pageNumber : 1);
+            parameters.Add("@PageSize", pageSize > 0 ? pageSize : 20);
 
-            model.lstMonitor = (await result.ReadAsync<EContract_Monitor>()).ToList();
-            model.subEmpl = (await result.ReadAsync<SubEmpl>()).ToList();
+            using var result = await conn.QueryMultipleAsync(
+                "wspList_EContracts_Search_test",
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                commandTimeout: 90 
+            );
 
-            MapEContractStatus(model.lstMonitor, crtUser);
-            return model;
+            var listMonitor = (await result.ReadAsync<EContract_Monitor>()).ToList();
 
+            // Đọc TotalRecords an toàn hơn
+            var pagingInfo = await result.ReadFirstAsync<dynamic>();
+            int totalRecords = pagingInfo != null ? (int)pagingInfo.TotalRecords : 0;
+
+            var subEmployees = (await result.ReadAsync<SubEmpl>()).ToList();
+
+            // Chỉ mapping trên list đã phân trang (rất nhanh)
+            MapEContractStatus(listMonitor, crtUser);
+
+            return (listMonitor, subEmployees, totalRecords);
         }
-
         public async Task<limitGHCNKD> CheckBCTT(string cmpnID, string saleID, string group)
         {
             using var connection = _dbConnectionFactory.GetConnection(BosOnline);
@@ -478,7 +489,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
             var detailsTable = new DataTable();
             // KHAI BÁO CỘT: Thứ tự phải trùng khớp 100% với SQL Type ở Bước 1
-            detailsTable.Columns.Add("ItemNo", typeof(int));          // 1
+            detailsTable.Columns.Add("ItemNo", typeof(int));         // 1
             detailsTable.Columns.Add("OID", typeof(string));         // 2
             detailsTable.Columns.Add("ItemID", typeof(string));      // 3
             detailsTable.Columns.Add("ItemName", typeof(string));    // 4
@@ -541,7 +552,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CmpnTel", master.CmpnTel);
             parameters.Add("@CmpnMail", master.CmpnMail);
             parameters.Add("@CmpnPeople_Sign", master.CmpnPeople_Sign);
-            parameters.Add("@CmpnPosition_BySign", master.CmpnPosition_BySign); // Lưu ý tên field
+            parameters.Add("@CmpnPosition_BySign", master.CmpnPosition_BySign); 
             parameters.Add("@CmpnBankNumber", master.CmpnBankNumber);
             parameters.Add("@CmpnBankAddress", master.CmpnBankAddress);
             parameters.Add("@SignDate", DateTime.Now);
@@ -642,21 +653,38 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         #region Helper
         private void MapEContractStatus(List<EContract_Monitor> list, string currentCrtUser)
         {
+            if (list == null || !list.Any()) return;
+
             var specialDate = new DateTime(2020, 07, 13);
+
             foreach (var item in list)
             {
-                if (item.ODATE < specialDate && item.CmpnID == "26") item.SiteName = "MONET";
+                // 1. Xử lý SiteName
+                if (item.ODATE < specialDate && item.CmpnID == "26")
+                    item.SiteName = "MONET";
+
+                // 2. Quyền chỉnh sửa
                 item.IsDisiable = item.Crt_User != currentCrtUser;
 
-                if (item.isContractPaper || item.isPLHD) item.TT3 = TTStatus.TT3_DACAP;
-                if (item.isDesignInvoice) item.TT2 = TTStatus.TT2_THIETKE;
+                // 3. Logic Hợp đồng giấy/Phụ lục
+                if (item.isContractPaper || item.isPLHD)
+                    item.TT3 = TTStatus.TT3_DACAP;
 
-                if (!string.IsNullOrEmpty(item.XHD)) item.isCheckedShow = true;
-                if (item.currSignNumbJobKT != 0) item.TT2 = item.TT6;
+                // 4. Thiết kế mẫu
+                if (item.isDesignInvoice)
+                    item.TT2 = TTStatus.TT2_THIETKE;
 
+                // 5. Kiểm tra kỹ thuật (Job KT)
+                if (item.currSignNumbJobKT != 0)
+                    item.TT2 = item.TT6;
+
+                // 6. Hiển thị Checkbox Xuất hóa đơn
+                item.isCheckedShow = !string.IsNullOrEmpty(item.XHD);
+
+                // 7. Logic mặc định cho Tool & TT78
                 bool isDefault = item.TT2 == "Chưa có yêu cầu tạo mẫu" &&
-                                item.TT3 == TTStatus.TT3_CHUACAP &&
-                                item.TT4 == TTStatus.TT4_CHUACAP;
+                                 item.TT3 == TTStatus.TT3_CHUACAP &&
+                                 item.TT4 == TTStatus.TT4_CHUACAP;
 
                 if (item.isTool && item.isTT78 && isDefault)
                 {
@@ -665,11 +693,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     if (!item.isGiaHan) item.TT4 = TTStatus.TT4_DACAP;
                 }
 
-                item.ischeckTK = item.TT3 == TTStatus.TT3_DACAP || item.isGiaHan;
-                item.ischeckPH = item.TT4 == TTStatus.TT4_DACAP;
-                item.ischeckKNV = item.TT4 == TTStatus.TT4_KHOANV;
-
-                if (item.ODATE != null) item.ODATE = (DateTime)item.ODATE;
+                // 8. Các flag trạng thái Checkbox
+                item.ischeckTK = (item.TT3 == TTStatus.TT3_DACAP || item.isGiaHan);
+                item.ischeckPH = (item.TT4 == TTStatus.TT4_DACAP);
+                item.ischeckKNV = (item.TT4 == TTStatus.TT4_KHOANV);
             }
         }
 
@@ -1816,6 +1843,19 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 commandType: CommandType.StoredProcedure,
                 commandTimeout: 120); 
             return result;
+        }
+
+        public async Task<IEnumerable<EContractWaiting>> GetRawList101Async(string frmDate, string endDate)
+        {
+            using var connection = _dbConnectionFactory.GetConnection(BosOnline);
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@Frm_date", frmDate);
+            parameters.Add("@End_date", endDate);
+            return await connection.QueryAsync<EContractWaiting>(
+                "wspList_EContracts_ChoKiemTra_101",
+                parameters,
+                commandType: CommandType.StoredProcedure);
         }
     }
 }

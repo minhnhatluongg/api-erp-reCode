@@ -16,6 +16,6 @@ namespace ERP_Portal_RC.Application.DTOs
         public string? Kinhdoanh { get; set; }
         public string? Status { get; set; }
         public int Page { get; set; } = 1;
-        public int PageSize { get; set; } = 50;
+        public int PageSize { get; set; } = 20;
     }
 }
