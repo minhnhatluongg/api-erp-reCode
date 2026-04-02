@@ -11,5 +11,8 @@ namespace ERP_Portal_RC.Domain.Entities
         public List<EContract_Monitor>? lstMonitor { get; set; }
         public List<SubEmpl>? subEmpl { get; set; }
         public bool IsDisiable { get; set; }
+        public List<EContract_Monitor>? Data { get; set; }
+        public List<SubEmpl>? Employees { get; set; }
+        public int Total { get; set; }
     }
 }

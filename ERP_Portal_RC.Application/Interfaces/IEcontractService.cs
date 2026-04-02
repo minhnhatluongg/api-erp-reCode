@@ -22,12 +22,7 @@ namespace ERP_Portal_RC.Application.Interfaces
             bool isManager,
             ContractSearchRequest request);
         //Lấy danh sách hợp đồng đã qua lọc trạng thái cho Table
-        Task<ListEcontractViewModel> GetContractListAsync(
-            string userCode,
-            string userName,
-            string grpList,
-            bool isManager,
-            ContractSearchRequest request);
+        Task<PagedResponse<EContract_Monitor>> GetContractListAsync(string userCode, string userName, string grpList, ContractSearchRequest request);
         //Get all EContracts with filters
         Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string userCode, string groupList);
 
@@ -77,5 +72,6 @@ namespace ERP_Portal_RC.Application.Interfaces
             DeXuatCapTaiKhoanRequestDto request);
 
         Task<ApiResponse<InvCounterResponseDto>> GetInvCounterByMSTAsync(InvCounterRequestDto request);
+        Task<IEnumerable<EContract101Response>> GetWaitingContracts(string frmDate, string endDate);
     } 
 }

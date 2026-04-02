@@ -62,30 +62,37 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
-        /// API lấy danh sách hợp đồng chi tiết 
-        [HttpGet("listContract")]
-        public async Task<ActionResult<ApiResponse<ListEcontractViewModel>>> GetListContract(
-            [FromQuery] ContractSearchRequest request,
-            [FromQuery] bool ismanager)
+        /// <summary>
+        /// API lấy danh sách hợp đồng điện tử có phân trang và lọc theo điều kiện.
+        /// </summary>
+        /// <param name="request">Các tham số lọc: Từ ngày, Đến ngày, Từ khóa, Trạng thái, Trang hiện tại, Số dòng/trang.</param>
+        /// <param name="ismanager">Flag xác định quyền quản lý (true: xem toàn bộ, false: xem cá nhân).</param>
+        /// <returns>Trả về đối tượng <see cref="ApiResponse{ListEcontractViewModel}"/> chứa danh sách hợp đồng và thông tin phân trang.</returns>
+        /// <response code="200">Lấy dữ liệu thành công.</response>
+        /// <response code="401">Người dùng chưa đăng nhập hoặc Token hết hạn.</response>
+        /// <response code="500">Lỗi hệ thống phát sinh tại server.</response>
+        [HttpGet("list-contract")]
+        [ProducesResponseType(typeof(ApiResponse<ListEcontractViewModel>), 200)]
+        public async Task<ActionResult<ApiResponse<PagedResponse<EContract_Monitor>>>> GetAllPaged(
+            [FromQuery] ContractSearchRequest request)
         {
             try
             {
-                var userName = User.Identity?.Name;
-                var userCode = User.FindFirst("UserCode")?.Value;
-                var grpList = User.FindFirst("Grp_List")?.Value;
+                var userName = User.Identity?.Name ?? "";
+                var userCode = User.FindFirst("UserCode")?.Value ?? "";
+                var grpList = User.FindFirst("Grp_List")?.Value ?? "";
 
                 var result = await _econtractService.GetContractListAsync(
-                    userCode!,
-                    userName!,
-                    grpList ?? "",
-                    ismanager,
+                    userCode,
+                    userName,
+                    grpList,
                     request);
 
-                return Ok(ApiResponse<ListEcontractViewModel>.SuccessResponse(result));
+                return Ok(ApiResponse<PagedResponse<EContract_Monitor>>.SuccessResponse(result));
             }
             catch (Exception ex)
             {
-                return BadRequest(ApiResponse<ListEcontractViewModel>.ErrorResponse(ex.Message));
+                return StatusCode(500, ApiResponse<PagedResponse<EContract_Monitor>>.ErrorResponse(ex.Message, 500));
             }
         }
 
@@ -639,6 +646,37 @@ namespace API.ERP_Portal_RC.Controllers
                     ApiResponse<DeXuatCapTaiKhoanResponseDto>.ErrorResponse(
                         "Lỗi hệ thống.", statusCode: 500,
                         errors: new List<string> { ex.Message }));
+            }
+        }
+
+        /// <summary>
+        /// Lấy danh sách các hợp đồng điện tử đang ở trạng thái "Chờ kiểm tra" hoặc "Đã gửi yêu cầu cấp tài khoản" (Mã trạng thái: 101).
+        /// </summary>
+        /// <param name="frmDate">Ngày bắt đầu lọc (Định dạng: yyyy-MM-dd). Nếu để trống, hệ thống mặc định lấy dữ liệu từ 30 ngày trước.</param>
+        /// <param name="endDate">Ngày kết thúc lọc (Định dạng: yyyy-MM-dd). Nếu để trống, hệ thống mặc định lấy đến thời điểm hiện tại.</param>
+        /// <returns>
+        [HttpGet("waiting-verify-101")]
+        public async Task<ActionResult<ApiResponse<IEnumerable<EContract101Response>>>> GetList101(
+        [FromQuery] string frmDate = "",
+        [FromQuery] string endDate = "")
+        {
+            try
+            {
+                var data = await _econtractService.GetWaitingContracts(frmDate, endDate);
+
+                if (data == null || !data.Any())
+                {
+                    return Ok(ApiResponse<IEnumerable<EContract101Response>>.SuccessResponse(
+                        data, "Không tìm thấy hợp đồng nào đang chờ kiểm tra."));
+                }
+                return Ok(ApiResponse<IEnumerable<EContract101Response>>.SuccessResponse(data));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ApiResponse<object>.ErrorResponse(
+                    "Đã có lỗi hệ thống xảy ra",
+                    500,
+                    new List<string> { ex.Message }));
             }
         }
     }
