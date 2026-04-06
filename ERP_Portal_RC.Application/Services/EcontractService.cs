@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.AccountKeToan;
 using ERP_Portal_RC.Application.DTOs.Count_Invoice;
 using ERP_Portal_RC.Application.DTOs.Integration_Incom;
 using ERP_Portal_RC.Application.Interfaces;
@@ -10,6 +11,7 @@ using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -23,6 +25,7 @@ using System.Transactions;
 using System.Xml;
 using System.Xml.Xsl;
 using static ERP_Portal_RC.Domain.Enum.PublicEnum;
+using ERP_Portal_RC.Domain.Common;
 
 namespace ERP_Portal_RC.Application.Services
 {
@@ -51,71 +54,83 @@ namespace ERP_Portal_RC.Application.Services
         }
         public async Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string groupList, string userCode)
         {
-            // 1. Chạy song song các Task độc lập
+
             var menuTask = _eContractRepository.GetDSMenuByID(userName, groupList);
             var moneyTask = _eContractRepository.CheckBCTT("26", userCode, "0000003");
+
             await Task.WhenAll(menuTask, moneyTask);
 
             var CN = await moneyTask;
             var resultMenu = await menuTask;
 
-            // 2. Chuẩn hóa tham số
             var dateFrom = !string.IsNullOrEmpty(request.FrmDate) ? request.FrmDate : "2010-01-01";
-            var dateTo = !string.IsNullOrEmpty(request.ToDate) ? request.ToDate : DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            var dateTo = !string.IsNullOrEmpty(request.ToDate) ? request.ToDate : DateTime.Now.AddDays(1).ToString("yyyy-MM-dd");
 
-            int pageNumber = request.Page > 0 ? request.Page : 1;
-            int pageSize = request.PageSize > 0 ? request.PageSize : 20;
-            int? statusFilter = int.TryParse(request.Status, out var s) ? s : null;
             string crtUser = (resultMenu?.mode == 1 || request.IsUser == "1") ? userCode : "%";
 
-            ListEcontractViewModel result = new ListEcontractViewModel(); 
-
+            ListEcontractViewModel result;
             if (!string.IsNullOrEmpty(request.EmplChild) && request.EmplChild != "null")
             {
                 string strEmplChild = (string.IsNullOrEmpty(request.StrEmplChild) || request.StrEmplChild == "null")
                     ? userCode : request.StrEmplChild;
 
-                // Hứng Tuple từ Hierarchy
-                var repoRes = await _eContractRepository.GetEContractsByHierarchyAsync(request.EmplChild, strEmplChild, dateFrom, dateTo, userCode);
-
-                result.lstMonitor = repoRes.Data;
-                result.subEmpl = repoRes.Employees;
-                result.Total = repoRes.Total;
+                result = await _eContractRepository.GetEContractsByHierarchyAsync(request.EmplChild, strEmplChild, dateFrom, dateTo, userCode);
+            }
+            else if (!string.IsNullOrEmpty(request.CusTName))
+            {
+                result = await _eContractRepository.Search(request.CusTName, crtUser, dateFrom, dateTo);
             }
             else
             {
-                var repoRes = await _eContractRepository.Search(request.CusTName ?? "", crtUser, dateFrom, dateTo, statusFilter, pageNumber, pageSize);
-                result.lstMonitor = repoRes.Data;
-                result.subEmpl = repoRes.Employees;
-                result.Total = repoRes.Total;
+                result = await _eContractRepository.GetAllList(crtUser, dateFrom, dateTo);
             }
 
-            if (result.lstMonitor == null || !result.lstMonitor.Any())
-                return new EContractServiceResult { Total = 0, Data = new List<EContract_Monitor>() };
+            if (result?.lstMonitor == null) return new EContractServiceResult { Total = 0, Data = new List<EContract_Monitor>() };
 
-            // 4. Xử lý chi tiết 
-            var pagedList = result.lstMonitor; 
-            var totalRecords = result.Total;   
-
-            var currentPageOids = pagedList.Select(x => x.OID).ToList();
-            var oidsWithDetails = await _eContractRepository.GetListOIDHasDetails(currentPageOids);
-            var oidsWithDetailsSet = new HashSet<string>(oidsWithDetails ?? new List<string>());
-
-            foreach (var item in pagedList)
+            var filteredQuery = result.lstMonitor.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(request.Status) && int.TryParse(request.Status, out int statusInt))
             {
-                if (item.ODATE == DateTime.MinValue) item.ODATE = DateTime.Now;
-                item.IsDisiable = (item.Crt_User != userCode);
-                if (item.currSignNumbJobKT != 0) item.TT2 = item.TT6;
-                item.isCheckedShow = oidsWithDetailsSet.Contains(item.OID);
+                filteredQuery = filteredQuery.Where(x => x.CurrSignNumb == statusInt);
             }
 
-            // 5. Trả về kết quả
+            // 5. Phân trang (Pagination)
+            int totalRecords = filteredQuery.Count();
+            int pageSize = request.PageSize;
+            int page = request.Page;
+            int offset = (page - 1) * pageSize;
+
+            var pagedList = (pageSize == -1)
+                ? filteredQuery.ToList()
+                : filteredQuery.Skip(offset).Take(pageSize).ToList();
+
+            if (pagedList.Any())
+            {
+                var currentPageOids = pagedList.Select(x => x.OID).ToList();
+                var oidsWithDetails = await _eContractRepository.GetListOIDHasDetails(currentPageOids);
+                var oidsWithDetailsSet = new HashSet<string>(oidsWithDetails ?? new List<string>());
+
+                foreach (var item in pagedList)
+                {
+                    // Đảm bảo ngày tháng hợp lệ
+                    if (item.ODATE == DateTime.MinValue) item.ODATE = DateTime.Now;
+
+                    // Quyền Disable dựa trên người tạo
+                    item.IsDisiable = (item.Crt_User != userCode);
+
+                    // Mapping trạng thái TT2 từ kế toán (TT6) nếu có
+                    if (item.currSignNumbJobKT != 0) item.TT2 = item.TT6;
+
+                    // Kiểm tra xem có chi tiết đính kèm không
+                    item.isCheckedShow = oidsWithDetailsSet.Contains(item.OID);
+                }
+            }
+
             return new EContractServiceResult
             {
                 MoneyToBePaid = (CN != null && CN.PTHU != 0.000m) ? FormatCurrency(CN.PTHU) : "0",
                 MoneyPaid = (CN != null && CN.DABTT != 0.000m) ? FormatCurrency(CN.DABTT) : "0",
                 Data = pagedList,
-                Total = totalRecords, // Dùng Total từ SQL
+                Total = totalRecords,
                 Disable = result.IsDisiable
             };
         }
@@ -165,47 +180,33 @@ namespace ERP_Portal_RC.Application.Services
             return ds;
         }
 
-        public async Task<PagedResponse<EContract_Monitor>> GetContractListAsync(string userCode, string userName, string grpList, ContractSearchRequest request)
+        public async Task<ListEcontractViewModel> GetContractListAsync(string userCode, string userName, string grpList, bool isManager, ContractSearchRequest request)
         {
-            // 1. Phân quyền User
             var menuInfo = await _eContractRepository.GetDSMenuByID(userName, grpList);
             string crtUserQuery = (menuInfo.mode == 1) ? userCode : UserMaster.UserCode;
 
-            // 2. Chuẩn hóa tham số
-            var dateFrom = !string.IsNullOrEmpty(request.FrmDate)
-               ? request.FrmDate
-               : DateTime.Now.AddDays(-7).ToString("yyyy-MM-dd");
-            string dateTo = request.ToDate ?? DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            ListEcontractViewModel result;
+            string dateFrom = request.FrmDate ?? "2019-01-01";
+            string dateTo = request.ToDate ?? DateTime.Now.AddDays(1).ToString("yyyy-MM-dd");
 
-            // Gộp từ khóa tìm kiếm (Ưu tiên theo thứ tự này)
             string searchKeyword = request.CusTName ?? request.CusTTax ?? request.NCC ?? request.Kinhdoanh;
 
-            // Parse Status an toàn
-            int? statusFilter = int.TryParse(request.Status, out var s) ? s : null;
+            if (!string.IsNullOrEmpty(searchKeyword))
+            {
+                result = await _eContractRepository.Search(searchKeyword, crtUserQuery, dateFrom, dateTo);
+            }
+            else
+            {
+                result = await _eContractRepository.GetAllList(crtUserQuery, dateFrom, dateTo);
+            }
 
-            // 3. Gọi Repo (Lọc + Phân trang đều nằm trong SQL)
-            var (data, employees, total) = await _eContractRepository.Search(
-                searchKeyword,
-                crtUserQuery,
-                dateFrom,
-                dateTo,
-                statusFilter,
-                request.Page,
-                request.PageSize
-            );
+            if (!string.IsNullOrEmpty(request.Status) && result.lstMonitor != null)
+            {
+                int statusInt = int.Parse(request.Status);
+                result.lstMonitor = result.lstMonitor.Where(x => x.CurrSignNumb == statusInt).ToList();
+            }
 
-            // 4. Trả về PagedResponse chuẩn
-            var response = PagedResponse<EContract_Monitor>.Create(
-                data,
-                request.Page,
-                request.PageSize,
-                total
-            );
-
-            // Nếu cần trả SubEmpl về cho UI (để vẽ filter cây nhân viên chẳng hạn)
-            response.Meta = new Dictionary<string, object> { { "subEmployees", employees } };
-
-            return response;
+            return result;
         }
 
         // 1. Trình ký hợp đồng: 0 -> 101 (Sử dụng store webContracts)
@@ -1331,6 +1332,7 @@ namespace ERP_Portal_RC.Application.Services
                 },
 
                 TemplateEcontract = resultRaw.TemplateEcontract,
+
                 ECtr_PublicInfo = resultRaw.ECtr_PublicInfo,
                 EmailUser = resultRaw.EmailUser
             };
@@ -1368,7 +1370,21 @@ namespace ERP_Portal_RC.Application.Services
 
             var groups = grpList.Replace("'", "").Replace("[", "").Replace("]", "").Split(',');
             result.IsshowReturnSign = groups.Any(g => g == "000.000.2102821152" || g == "00006.00063.00121");
+            if (result.ECtr_PublicInfo != null)
+            {
+                if (result.ECtr_PublicInfo.InvcContent != null && result.ECtr_PublicInfo.InvcContent.Length > 0)
+                {
+                    string decompressedXml = ERP_Portal_RC.Domain.Common.CompressionHelper.DecompressGZip(result.ECtr_PublicInfo.InvcContent);
+                    result.ECtr_PublicInfo.InvcContentStr = decompressedXml; 
+                }
 
+                // 2. Giải nén nội dung khách hàng ký
+                if (result.ECtr_PublicInfo.InvcContent_ByCus != null && result.ECtr_PublicInfo.InvcContent_ByCus.Length > 0)
+                {
+                    string decompressedCusXml = ERP_Portal_RC.Domain.Common.CompressionHelper.DecompressGZip(result.ECtr_PublicInfo.InvcContent_ByCus);
+                    result.ECtr_PublicInfo.InvcContent_ByCusStr = decompressedCusXml;
+                }
+            }
             return result;
         }
 
@@ -1632,6 +1648,8 @@ namespace ERP_Portal_RC.Application.Services
                 CreatedDateFormatted = e.Crt_Date,
             });
         }
+
+        
     }
 }
 

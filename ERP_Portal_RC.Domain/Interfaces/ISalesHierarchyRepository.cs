@@ -18,5 +18,7 @@ namespace ERP_Portal_RC.Domain.Interfaces
         /// Gọi API bên ngoài để tạo tài khoản HR trên hệ thống khác.
         /// </summary>
         Task<(bool Success, string? ErrorMessage)> CreateHRAccountAsync(string fullName, string email, string phone, string username, string password, string winId);
+
+        Task<string> AssignUserToGroupAsync(string userCode, string grpCode);
     }
 }

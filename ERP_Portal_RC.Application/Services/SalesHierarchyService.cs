@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.AccountKeToan;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
@@ -15,6 +16,8 @@ namespace ERP_Portal_RC.Application.Services
         private readonly ISalesHierarchyRepository _salesHierarchyRepository;
         private readonly ICustomStore _customStore;
         private readonly IRegistrationCodeService _registrationCodeService;
+        private const string AccountingGrpCode = "00006.00063.00121";
+
         public SalesHierarchyService(ISalesHierarchyRepository salesHierarchyRepository, ICustomStore customStore, IRegistrationCodeService registrationCodeService)
         {
             _salesHierarchyRepository = salesHierarchyRepository;
@@ -59,6 +62,40 @@ namespace ERP_Portal_RC.Application.Services
                     tree.Add(dto);
             }
             return tree;
+        }
+
+        public async Task<AccountingRegistrationResultDto> HandleAccountingRegistrationAsync(AccountingRegistrationRequestDto request)
+        {
+            // Validate
+            if (string.IsNullOrWhiteSpace(request.LoginName))
+                throw new ArgumentException("LoginName không được để trống.");
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new ArgumentException("Password không được để trống.");
+            if (string.IsNullOrWhiteSpace(request.FullName))
+                throw new ArgumentException("FullName không được để trống.");
+
+            // Bước 1: Tạo ERP account qua bosInsertUserOnApp
+            var userCode = await _salesHierarchyRepository.CreateERPAccountOnlyAsync(
+                loginName: request.LoginName,
+                password: request.Password,
+                fullName: request.FullName,
+                email: request.Email,
+                emplId: request.EmplId  
+            );
+
+            if (string.IsNullOrWhiteSpace(userCode))
+                throw new Exception("Tạo tài khoản thất bại: SP không trả về UserCode.");
+
+            // Bước 2: Gán vào group Kế toán
+            await _salesHierarchyRepository.AssignUserToGroupAsync(userCode, AccountingGrpCode);
+
+            return new AccountingRegistrationResultDto
+            {
+                UserCode = userCode,
+                LoginName = request.LoginName,
+                GrpCode = AccountingGrpCode,
+                Message = $"Tạo tài khoản kế toán thành công. UserCode: {userCode}"
+            };
         }
 
         public async Task<RegistrationResultDto> HandleSaleRegistrationAsync(SaleRegistrationModel request)

@@ -250,6 +250,7 @@ namespace ERP_Portal_RC.Application.Services
                 oid:             request.Oid,
                 signedXmlBase64: xmlBase64ForSp,
                 orderDate:       dtOrder,
+                partnerSoCCCD :  data["PartnerSoCCCD"]?.ToString() ?? "NO_CCCD", //Payload send còn thiếu 
                 partnerVat:      data["PartnerVAT"]?.ToString()   ?? "",
                 partnerName:     data["PartnerName"]?.ToString()  ?? "",
                 companyTax:      comp?["TaxCode"]?.ToString()      ?? "",
@@ -386,6 +387,31 @@ namespace ERP_Portal_RC.Application.Services
                 "FAILED"     => -1,
                 _            => 0
             };
+        }
+
+        public async Task<ApiResponse<object>> SaveContractAfterSigningAsync(SaveSignedXmlRequest request)
+        {
+            var (isSigned, _) = await _signRepo.IsSignedAsync(request.OID);
+            if (isSigned)
+            {
+                return ApiResponse<object>.ErrorResponse("Hợp đồng này đã được lưu trên hệ thống trước đó.", 400);
+            }
+            bool isSaved = await _signRepo.SaveSignedXmlAsync(
+                oid:             request.OID,
+                signedXmlBase64: request.SignedXmlBase64,
+                orderDate:       request.OrderDate,
+                partnerSoCCCD: request.PartnerSoCCCD ?? "NO_CCCD", 
+                partnerVat:      request.PartnerVat,
+                partnerName:     request.PartnerName,
+                companyTax:      request.CompanyTax,
+                companyName:     request.CompanyName);
+            if (!isSaved)
+            {
+                await _signRepo.UpdateAppSignStatusByOidAsync(request.OID, -1, "Lỗi khi thực thi Stored Procedure lưu XML");
+                return ApiResponse<object>.ErrorResponse("Lưu dữ liệu hợp đồng thất bại.", 500);
+            }
+            await _signRepo.UpdateAppSignStatusByOidAsync(request.OID, 2, "Ký số và lưu hệ thống thành công");
+            return ApiResponse<object>.SuccessResponse(null, "Lưu hợp đồng thành công.");
         }
     }
 }
