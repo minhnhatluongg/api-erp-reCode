@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.AccountKeToan;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
@@ -36,6 +37,26 @@ namespace API.ERP_Portal_RC.Controllers
             catch (Exception ex)
             {
                 return BadRequest(ApiResponse<RegistrationResultDto>.ErrorResponse(ex.Message));
+            }
+        }
+
+        [HttpPost("accounting/register")]
+        public async Task<IActionResult> RegisterAccounting(
+            [FromBody] AccountingRegistrationRequestDto request)
+        {
+            try
+            {
+                var result = await _salesHierarchyService.HandleAccountingRegistrationAsync(request);
+                return Ok(ApiResponse<AccountingRegistrationResultDto>.SuccessResponse(
+                    result, "Tạo tài khoản kế toán thành công."));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ApiResponse<AccountingRegistrationResultDto>.ErrorResponse(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ApiResponse<AccountingRegistrationResultDto>.ErrorResponse(ex.Message));
             }
         }
     }

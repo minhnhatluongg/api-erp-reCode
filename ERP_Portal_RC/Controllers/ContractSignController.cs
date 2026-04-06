@@ -1,5 +1,7 @@
 using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
+using ERP_Portal_RC.Application.Services;
+using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -45,9 +47,9 @@ namespace API.ERP_Portal_RC.Controllers
 
                 return Ok(new
                 {
-                    Status  = result.IsSuccess ? 1 : -1,
+                    Status = result.IsSuccess ? 1 : -1,
                     Message = result.Message,
-                    Data    = result.Data
+                    Data = result.Data
                 });
             }
             catch (Exception ex)
@@ -123,8 +125,8 @@ namespace API.ERP_Portal_RC.Controllers
                 if (request == null)
                     return Ok(new
                     {
-                        IsSuccess  = false,
-                        Message    = "Request is null",
+                        IsSuccess = false,
+                        Message = "Request is null",
                         ReturnDate = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
                     });
 
@@ -132,9 +134,9 @@ namespace API.ERP_Portal_RC.Controllers
 
                 return Ok(new
                 {
-                    IsSuccess  = isSuccess,
-                    Data       = new { ApiInfo = "" },
-                    Message    = message,
+                    IsSuccess = isSuccess,
+                    Data = new { ApiInfo = "" },
+                    Message = message,
                     ReturnDate = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
                 });
             }
@@ -142,9 +144,9 @@ namespace API.ERP_Portal_RC.Controllers
             {
                 return Ok(new
                 {
-                    IsSuccess  = false,
-                    Data       = new { ApiInfo = "" },
-                    Message    = "Lỗi: " + ex.Message,
+                    IsSuccess = false,
+                    Data = new { ApiInfo = "" },
+                    Message = "Lỗi: " + ex.Message,
                     ReturnDate = DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")
                 });
             }
@@ -166,7 +168,7 @@ namespace API.ERP_Portal_RC.Controllers
                 return Ok(new ValidJwtResponse
                 {
                     IsSuccess = false,
-                    Message   = "Lỗi: " + ex.Message,
+                    Message = "Lỗi: " + ex.Message,
                     ReturnDate = DateTime.Now
                 });
             }
@@ -183,8 +185,8 @@ namespace API.ERP_Portal_RC.Controllers
                 if (request == null)
                     return Ok(new GetInvParamResponse
                     {
-                        IsSuccess  = false,
-                        Message    = "KeyID is required",
+                        IsSuccess = false,
+                        Message = "KeyID is required",
                         ReturnDate = DateTime.Now
                     });
 
@@ -195,8 +197,8 @@ namespace API.ERP_Portal_RC.Controllers
             {
                 return Ok(new GetInvParamResponse
                 {
-                    IsSuccess  = false,
-                    Message    = "Lỗi: " + ex.Message,
+                    IsSuccess = false,
+                    Message = "Lỗi: " + ex.Message,
                     ReturnDate = DateTime.Now
                 });
             }
@@ -217,8 +219,8 @@ namespace API.ERP_Portal_RC.Controllers
             {
                 return Ok(new GetXmlAllResponse
                 {
-                    IsSuccess  = false,
-                    Message    = "Lỗi: " + ex.Message,
+                    IsSuccess = false,
+                    Message = "Lỗi: " + ex.Message,
                     ReturnDate = DateTime.Now
                 });
             }
@@ -242,11 +244,30 @@ namespace API.ERP_Portal_RC.Controllers
             {
                 return Ok(new SetSignedXmlResponse
                 {
-                    IsSuccess  = false,
-                    Message    = "Lỗi: " + ex.Message,
+                    IsSuccess = false,
+                    Message = "Lỗi: " + ex.Message,
                     ReturnDate = DateTime.Now
                 });
             }
+        }
+        /// <summary>
+        /// API Lưu hợp đồng sau khi đã ký số thành công từ HSM/Client.
+        /// </summary>
+        /// <param name="request">
+        /// Cung cấp thông tin định danh công ty và dữ liệu đã ký:
+        /// <br/>- <b>companyTax</b>: Mã số thuế của cty mình (Ví dụ: 0312303803)
+        /// <br/>- <b>companyName</b>: Tên cty mình (Ví dụ: CÔNG TY TNHH WIN TECH SOLUTION)
+        /// </param>
+        [HttpPost("save-signed-xml")]
+        public async Task<IActionResult> SaveSignedXml([FromBody] SaveSignedXmlRequest request)
+        {
+            if (request == null || string.IsNullOrEmpty(request.SignedXmlBase64))
+            {
+                return BadRequest(ApiResponse<object>.ErrorResponse("Dữ liệu ký không hợp lệ", 400));
+            }
+
+            var result = await _signService.SaveContractAfterSigningAsync(request);
+            return StatusCode(result.StatusCode, result);
         }
 
         #endregion

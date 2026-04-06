@@ -1,4 +1,5 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.DTOs.AccountKeToan;
 using ERP_Portal_RC.Application.DTOs.Count_Invoice;
 using ERP_Portal_RC.Application.DTOs.Integration_Incom;
 using ERP_Portal_RC.Domain.Common;
@@ -22,7 +23,12 @@ namespace ERP_Portal_RC.Application.Interfaces
             bool isManager,
             ContractSearchRequest request);
         //Lấy danh sách hợp đồng đã qua lọc trạng thái cho Table
-        Task<PagedResponse<EContract_Monitor>> GetContractListAsync(string userCode, string userName, string grpList, ContractSearchRequest request);
+        Task<ListEcontractViewModel> GetContractListAsync(
+            string userCode,
+            string userName,
+            string grpList,
+            bool isManager,
+            ContractSearchRequest request);
         //Get all EContracts with filters
         Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string userCode, string groupList);
 
@@ -73,5 +79,6 @@ namespace ERP_Portal_RC.Application.Interfaces
 
         Task<ApiResponse<InvCounterResponseDto>> GetInvCounterByMSTAsync(InvCounterRequestDto request);
         Task<IEnumerable<EContract101Response>> GetWaitingContracts(string frmDate, string endDate);
+        
     } 
 }

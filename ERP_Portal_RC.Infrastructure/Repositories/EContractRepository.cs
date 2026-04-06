@@ -93,40 +93,28 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return await _dSign.GetDSMenuByID(loginName, grpCode);
         }
 
-        public async Task<(List<EContract_Monitor> Data, List<SubEmpl> Employees, int Total)> Search(
-    string search, string crtUser, string dateStart, string dateEnd,
-    int? status, int pageNumber, int pageSize)
+        public async
+            Task<ListEcontractViewModel> Search(string search, string crtUser, string dateStart, string dateEnd)
         {
+            if (search == "CÔNG TY TNHH WIN TECH SOLUTION") search = "WIN TECH";
+            if (search == "CÔNG TY TNHH WIN ONLINE MEDIA") search = "WIN ONLINE";
+
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
             var parameters = new DynamicParameters();
-            parameters.Add("@strSearch", search?.Trim());
+            parameters.Add("@strSearch", search);
             parameters.Add("@CrtUser", crtUser);
             parameters.Add("@Frm_date", dateStart);
             parameters.Add("@End_date", dateEnd);
-            parameters.Add("@Status", status);
-            parameters.Add("@PageNumber", pageNumber > 0 ? pageNumber : 1);
-            parameters.Add("@PageSize", pageSize > 0 ? pageSize : 20);
+            var model = new ListEcontractViewModel();
+            var result = await conn.QueryMultipleAsync("wspList_EContracts_Search_test", parameters, commandType: CommandType.StoredProcedure);
 
-            using var result = await conn.QueryMultipleAsync(
-                "wspList_EContracts_Search_test",
-                parameters,
-                commandType: CommandType.StoredProcedure,
-                commandTimeout: 90 
-            );
+            model.lstMonitor = (await result.ReadAsync<EContract_Monitor>()).ToList();
+            model.subEmpl = (await result.ReadAsync<SubEmpl>()).ToList();
 
-            var listMonitor = (await result.ReadAsync<EContract_Monitor>()).ToList();
-
-            // Đọc TotalRecords an toàn hơn
-            var pagingInfo = await result.ReadFirstAsync<dynamic>();
-            int totalRecords = pagingInfo != null ? (int)pagingInfo.TotalRecords : 0;
-
-            var subEmployees = (await result.ReadAsync<SubEmpl>()).ToList();
-
-            // Chỉ mapping trên list đã phân trang (rất nhanh)
-            MapEContractStatus(listMonitor, crtUser);
-
-            return (listMonitor, subEmployees, totalRecords);
+            MapEContractStatus(model.lstMonitor, crtUser);
+            return model;
         }
+
         public async Task<limitGHCNKD> CheckBCTT(string cmpnID, string saleID, string group)
         {
             using var connection = _dbConnectionFactory.GetConnection(BosOnline);

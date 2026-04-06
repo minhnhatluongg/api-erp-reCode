@@ -21,6 +21,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         private readonly HttpClient _hrAccountClient;
         private const string bosHumanRs = "BosHumanResource";
         private const string BosConfigureDb = "BosConfigure";
+        private const string AccountingGrpCode = "00006.00063.00121";
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -140,6 +141,38 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             }
 
             return (true, null);
+        }
+
+        public async Task<string> AssignUserToGroupAsync(string userCode, string grpCode)
+        {
+            using var connection = _dbConnectionFactory.OpenConnection(BosConfigureDb);
+
+            const string sql = @"
+                INSERT INTO [bosConfigure].[dbo].[bosUserOnGroup] 
+                    (DESCRIP, Grp_Code, UserCode, SignNumb, SignDate, Crt_User, Crt_Date, ChgeUser, ChgeDate, CmpnID)
+                SELECT 
+                    '',           -- DESCRIP: nvarchar NOT NULL, default ''
+                    @GrpCode,     -- Grp_Code
+                    @UserCode,    -- UserCode
+                    0,            -- SignNumb: int, default 0
+                    GETDATE(),    -- SignDate: datetime NOT NULL
+                    @UserCode,    -- Crt_User
+                    GETDATE(),    -- Crt_Date
+                    @UserCode,    -- ChgeUser
+                    GETDATE(),    -- ChgeDate
+                    '00'          -- CmpnID: varchar NOT NULL, default '' — đổi nếu CmpnID khác
+                WHERE NOT EXISTS (
+                    SELECT 1 
+                    FROM [bosConfigure].[dbo].[bosUserOnGroup] WITH(NOLOCK)
+                    WHERE UserCode = @UserCode AND Grp_Code = @GrpCode
+                );
+                SELECT @UserCode;";
+
+            return await connection.QueryFirstOrDefaultAsync<string>(sql, new
+            {
+                UserCode = userCode,
+                GrpCode = grpCode
+            });
         }
     }
 }

@@ -1,4 +1,5 @@
 using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 
 namespace ERP_Portal_RC.Application.Interfaces
@@ -56,5 +57,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         /// Nộp XML đã ký lên server, lưu vào DB (API 2.e – SetSignedXml).
         /// </summary>
         Task<SetSignedXmlResponse> SetSignedXmlAsync(SetSignedXmlRequest request);
+
+        Task<ApiResponse<object>> SaveContractAfterSigningAsync(SaveSignedXmlRequest request);
     }
 }

@@ -43,6 +43,7 @@ namespace ERP_Portal_RC.Domain.Interfaces
             string oid,
             string signedXmlBase64,
             DateTime orderDate,
+            string partnerSoCCCD,
             string partnerVat,
             string partnerName,
             string companyTax,

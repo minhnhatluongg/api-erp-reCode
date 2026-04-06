@@ -71,28 +71,29 @@ namespace API.ERP_Portal_RC.Controllers
         /// <response code="200">Lấy dữ liệu thành công.</response>
         /// <response code="401">Người dùng chưa đăng nhập hoặc Token hết hạn.</response>
         /// <response code="500">Lỗi hệ thống phát sinh tại server.</response>
-        [HttpGet("list-contract")]
-        [ProducesResponseType(typeof(ApiResponse<ListEcontractViewModel>), 200)]
-        public async Task<ActionResult<ApiResponse<PagedResponse<EContract_Monitor>>>> GetAllPaged(
-            [FromQuery] ContractSearchRequest request)
+        [HttpGet("listContract")]
+        public async Task<ActionResult<ApiResponse<ListEcontractViewModel>>> GetListContract(
+            [FromQuery] ContractSearchRequest request,
+            [FromQuery] bool ismanager)
         {
             try
             {
-                var userName = User.Identity?.Name ?? "";
-                var userCode = User.FindFirst("UserCode")?.Value ?? "";
-                var grpList = User.FindFirst("Grp_List")?.Value ?? "";
+                var userName = User.Identity?.Name;
+                var userCode = User.FindFirst("UserCode")?.Value;
+                var grpList = User.FindFirst("Grp_List")?.Value;
 
                 var result = await _econtractService.GetContractListAsync(
-                    userCode,
-                    userName,
-                    grpList,
+                    userCode!,
+                    userName!,
+                    grpList ?? "",
+                    ismanager,
                     request);
 
-                return Ok(ApiResponse<PagedResponse<EContract_Monitor>>.SuccessResponse(result));
+                return Ok(ApiResponse<ListEcontractViewModel>.SuccessResponse(result));
             }
             catch (Exception ex)
             {
-                return StatusCode(500, ApiResponse<PagedResponse<EContract_Monitor>>.ErrorResponse(ex.Message, 500));
+                return BadRequest(ApiResponse<ListEcontractViewModel>.ErrorResponse(ex.Message));
             }
         }
 
@@ -583,6 +584,27 @@ namespace API.ERP_Portal_RC.Controllers
             return Ok(response);
         }
 
+        /// <summary>
+        /// Khởi tạo một yêu cầu xử lý công việc (Job) mới.
+        /// </summary>
+        /// <param name="request">
+        /// Thông tin yêu cầu. Danh sách mã **FactorID,EntryID** xử lý:
+        /// 
+        /// 
+        /// - ** EntryID:(JB:001) ** → Tạo mẫu có sẵn (FactorID :JOB_00001)
+        /// - ** EntryID:(JB:002) ** → Tạo mẫu thiết kế (FactorID :JOB_00001)
+        /// - ** EntryID:(JB:005) ** → Điều chỉnh mẫu (FactorID :JOB_00001)
+        /// - ** EntryID:(JB:004) ** → Phát hành hóa đơn (FactorID :JOB_00002)
+        /// - ** EntryID:(JB:003) ** → Kích hoạt tài khoản (FactorID :JOB_00003) 
+        /// - ** EntryID:(JB:006) ** → Đề xuất chỉnh sửa (FactorID :JOB_00003)
+        /// - ** EntryID:(JB:012) ** → Kiểm tra mẫu (FactorID :JOB_00006)
+        /// - ** EntryID:(JB:010) ** → Xuất hóa đơn Hóa Đơn Điện Tử (FactorID :JOB_00005)
+        /// 
+        /// - ** Gửi lần đầu sẽ luôn ở trạng thái trình kí ( SignNumb : 101) cho mọi yêu cầu.
+        /// </param>
+        /// <response code="200">Khởi tạo Job thành công</response>
+        /// <response code="401">Không tìm thấy thông tin định danh người dùng</response>
+        /// <response code="400">Dữ liệu đầu vào không hợp lệ</response>
         [HttpPost("create-job")]
         public async Task<IActionResult> CreateJob([FromBody] InsertJobRequest request)
         {
