@@ -13,7 +13,6 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
     public class EvatRepository : IEvatRepository
     {
         private readonly IDbConnectionFactory _connectionFactory;
-        private const string BosEvat = "BosEVAT";
         public EvatRepository(IDbConnectionFactory dbConnectionFactory)
         {
             _connectionFactory = dbConnectionFactory;

@@ -20,6 +20,11 @@ namespace API.ERP_Portal_RC.Controllers
             _service = service;
             _logger = logger;
         }
+        /// <summary>
+        /// Lưu file XML đã ký số vào hệ thống.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("save-signed-xml")]
         [ProducesResponseType(typeof(ApiResponse<SaveSignedXmlResponseDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<SaveSignedXmlResponseDto>), StatusCodes.Status400BadRequest)]

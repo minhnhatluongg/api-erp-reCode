@@ -18,6 +18,11 @@ public class InvoicePreviewController : ControllerBase
         _previewService = previewService;
     }
 
+    /// <summary>
+    /// API View hóa đơn - Dành cho nghiệp vụ thiết kế mẫu - Demo : winsale.wininvoice.vn 
+    /// </summary>
+    /// <param name="input"></param>
+    /// <returns></returns>
     [HttpPost("view")]
     public async Task<IActionResult> ViewInvoicePreview([FromBody] PreviewRequestDto input)
     {
@@ -56,7 +61,12 @@ public class InvoicePreviewController : ControllerBase
             return StatusCode(500, Content(errorHtml, "text/html", Encoding.UTF8));
         }
     }
-    
+
+    /// <summary>
+    /// API Phát hành mẫu sau khi chọn mẫu xong - Dành cho nghiệp vụ thiết kế mẫu - Check sau khi hoàn thành ở quanly.wininvoice.vn 
+    /// </summary>
+    /// <param name="input"></param>
+    /// <returns></returns>
     [HttpPost("confirm-sample")]
     [Produces("application/json")]
     public async Task<IActionResult> ConfirmSampleAndGetFiles([FromBody] PreviewRequestDto input)

@@ -20,6 +20,11 @@ namespace API.ERP_Portal_RC.Controllers
             _logger = logger;
         }
 
+        /// <summary>
+        /// Tạo mới tài khoản hệ thống cho khách hàng theo MST.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("cap-tai-khoan")]
         [ProducesResponseType(typeof(CreateAccountResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(CreateAccountResponseDto), StatusCodes.Status400BadRequest)]
@@ -47,7 +52,12 @@ namespace API.ERP_Portal_RC.Controllers
                 });
             }
         }
-        
+        /// <summary>
+        /// Kiểm tra trạng thái server / tài khoản theo MST và CCCD.
+        /// </summary>
+        /// <param name="mst"></param>
+        /// <param name="cccd"></param>
+        /// <returns></returns>
         [HttpGet("check-server/{mst}")]
         [ProducesResponseType(typeof(CheckServerResponseDto), StatusCodes.Status200OK)]
         public IActionResult CheckServer(string mst, [FromQuery] string cccd = "")

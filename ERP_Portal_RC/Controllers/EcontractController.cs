@@ -20,6 +20,7 @@ namespace API.ERP_Portal_RC.Controllers
     [ApiController]
     public class EcontractController : Controller
     {
+        //[ApiExplorerSettings(IgnoreApi = true)] -> Check các API bị ẩn
         private readonly IEcontractService _econtractService;
         private readonly IConfiguration _configuration;
         public EcontractController(IEcontractService econtractService, IConfiguration configuration)
@@ -27,7 +28,12 @@ namespace API.ERP_Portal_RC.Controllers
             _econtractService = econtractService;
             _configuration = configuration;
         }
-
+        /// <summary>
+        /// Lấy thống kê dashboard hợp đồng (đếm theo trạng thái).
+        /// </summary>
+        /// <param name="request"></param>
+        /// <param name="ismanager"></param>
+        /// <returns></returns>
         [HttpGet("countContract")]
         public async Task<ActionResult<ApiResponse<object>>> CountContract(
             [FromQuery] ContractSearchRequest request,
@@ -96,7 +102,11 @@ namespace API.ERP_Portal_RC.Controllers
                 return BadRequest(ApiResponse<ListEcontractViewModel>.ErrorResponse(ex.Message));
             }
         }
-
+        /// <summary>
+        /// Lấy toàn bộ hợp đồng theo bộ lọc mở rộng, trả kèm meta tiền.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpGet("")]
         public async Task<IActionResult> GetAll([FromQuery] EContractFilterRequest request)
         {
@@ -139,8 +149,11 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
-        /// Lấy mẫu hợp đồng dựa trên loại sử dụng ApiResponse wrapper
-        /// <param name="type"> original | compensation | extension</param>
+        /// <summary>
+        /// Lấy mẫu hợp đồng theo loại (original / compensation / extension).
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
         [HttpGet("preview/{type}")]
         public async Task<ActionResult<ApiResponse<Template>>> GetTemplateByType(string type)
         {
@@ -184,8 +197,11 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
-        /// API xem trước hợp đồng (Preview) trước khi lưu
-        /// <param name="request">Dữ liệu nháp từ các bước nhập liệu trên FE</param>
+        /// <summary>
+        /// Tạo file xem trước hợp đồng từ dữ liệu nháp.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("generate-preview")]
         public async Task<ActionResult<ApiResponse<string>>> GeneratePreview([FromBody] ContractPreviewRequest request)
         {
@@ -308,7 +324,11 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         #endregion
-
+        /// <summary>
+        /// Lưu và phê duyệt hợp đồng trong một lần gọi.
+        /// </summary>
+        /// <param name="request">Dữ liệu hợp đồng từ các bước nhập liệu trên FE</param>
+        /// <returns>Kết quả thực hiện</returns>
         [HttpPost("save-and-approve")]
         public async Task<IActionResult> SaveAndApprove([FromBody] ContractPreviewRequest request)
         {
@@ -331,7 +351,11 @@ namespace API.ERP_Portal_RC.Controllers
 
             return Ok(result);
         }
-
+        /// <summary>
+        /// Lấy trạng thái tổng hợp + lịch sử duyệt theo OID.
+        /// </summary>
+        /// <param name="oid"></param>
+        /// <returns></returns>
         [HttpGet("get-status-summary")]
         public async Task<IActionResult> GetStatusSummary(string oid)
         {
@@ -346,6 +370,11 @@ namespace API.ERP_Portal_RC.Controllers
             return Ok(ApiResponse<ContractStatusResponse>.SuccessResponse(result, "Lấy thông tin thành công."));
         }
 
+        /// <summary>
+        /// Xóa bản nháp hợp đồng (chỉ được xóa khi chưa trình ký).
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpDelete("draft")]
         public async Task<IActionResult> DeleteDraft([FromBody] DeleteEcontractRequest request)
         {
@@ -353,7 +382,11 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.DeleteDraftAsync(request, username);
             return Ok(result);
         }
-
+        /// <summary>
+        /// Hủy ký hợp đồng.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("unsign")]
         public async Task<IActionResult> UnSign([FromBody] UnSignRequest request)
         {
@@ -363,7 +396,11 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.UnSignAsync(request);
             return Ok(result);
         }
-
+        /// <summary>
+        /// Lấy lịch sử các job xử lý theo OID hợp đồng.
+        /// </summary>
+        /// <param name="oid"></param>
+        /// <returns></returns>
         [HttpGet("job-history")]
         public async Task<IActionResult> GetJobHistory([FromQuery] string oid)
         {
@@ -373,7 +410,11 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.GetJobHistoryAsync(oid);
             return Ok(result);
         }
-
+        /// <summary>
+        /// Lấy danh sách job kỹ thuật (JobKT) theo OID.
+        /// </summary>
+        /// <param name="OID"></param>
+        /// <returns></returns>
         [HttpGet("getjobKT")]
         public async Task<IActionResult> GetJobKT(string OID)
         {
@@ -405,7 +446,11 @@ namespace API.ERP_Portal_RC.Controllers
                 return StatusCode(500, response);
             }
         }
-
+        /// <summary>
+        /// Lấy chi tiết nội dung hợp đồng theo OID.
+        /// </summary>
+        /// <param name="oid"></param>
+        /// <returns></returns>
         [HttpGet("get-details/{oid}")] 
         public async Task<IActionResult> GetEContractDetails(string oid)
         {
@@ -436,6 +481,12 @@ namespace API.ERP_Portal_RC.Controllers
 
             return Ok(result);
         }
+        /// <summary>
+        /// Lấy danh sách phòng ban có quyền thao tác với hợp đồng điện tử (Dựa trên claim "OperDeptList" trong token). Có phân trang.
+        /// </summary>
+        /// <param name="pageSize"></param>
+        /// <param name="pageNumber"></param>
+        /// <returns></returns>
         [HttpGet("get-departments")]
         public async Task<IActionResult> GetDepartments(int pageSize = 10, int pageNumber = 1)
         {
@@ -447,7 +498,12 @@ namespace API.ERP_Portal_RC.Controllers
             var response = await _econtractService.GetDepartmentsPagedAsync(operDeptList, pageNumber, pageSize);
             return Ok(response);
         }
-
+        /// <summary>
+        /// Xác minh chi tiết job theo mã số thuế và OID.
+        /// </summary>
+        /// <param name="cusTax"></param>
+        /// <param name="oid"></param>
+        /// <returns></returns>
         [HttpGet("verify-job")]
         public async Task<IActionResult> VerifyJob([FromQuery] string cusTax, [FromQuery] string oid)
         {
@@ -465,6 +521,12 @@ namespace API.ERP_Portal_RC.Controllers
             }
             return Ok(response);
         }
+        /// <summary>
+        /// Upload file đính kèm hợp đồng (không giới hạn kích thước).
+        /// </summary>
+        /// <param name="files"></param>
+        /// <param name="oid"></param>
+        /// <returns></returns>
         [HttpPost("upload-files")]
         [DisableRequestSizeLimit]
         public async Task<IActionResult> UploadFiles(IFormFileCollection files, [FromQuery] string oid)
@@ -479,6 +541,11 @@ namespace API.ERP_Portal_RC.Controllers
             var response = await _econtractService.UploadContractFilesAsync(files, oid);
             return Ok(response);
         }
+        /// <summary>
+        /// Lấy danh sách file đã upload theo OID hợp đồng.
+        /// </summary>
+        /// <param name="oid"></param>
+        /// <returns></returns>
         [HttpGet("list/{oid}")]
         public async Task<IActionResult> GetListFiles(string oid)
         {
@@ -514,6 +581,7 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
+        [ApiExplorerSettings(IgnoreApi = true)]
         [HttpPost("save-job")]
         public async Task<IActionResult> SaveJob([FromBody] SaveJobRequestDto request)
         {
@@ -530,6 +598,8 @@ namespace API.ERP_Portal_RC.Controllers
             var response = await _econtractService.SaveJobAsync(request, userCode);
             return Ok(response);
         }
+
+        [ApiExplorerSettings(IgnoreApi = true)]
         [HttpPost("approve-job-now")]
         public async Task<IActionResult> ApproveJobNow([FromBody] ApproveJobRequestDto request)
         {
@@ -540,7 +610,11 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.ApproveJobNowAsync(request, userCode, fullName);
             return Ok(result);
         }
-
+        /// <summary>
+        /// Lấy thông tin hiển thị chi tiết hợp đồng theo OID.
+        /// </summary>
+        /// <param name="oid"></param>
+        /// <returns></returns>
         [HttpGet("get")]
         public async Task<IActionResult> Get([FromQuery] string oid)
         {
@@ -568,6 +642,12 @@ namespace API.ERP_Portal_RC.Controllers
                 return Ok(ApiResponse<object>.ErrorResponse($"Lỗi hệ thống: {ex.Message}"));
             }
         }
+
+        /// <summary>
+        /// Kiểm tra hợp đồng đã được trình ký hay chưa.
+        /// </summary>
+        /// <param name="oid"></param>
+        /// <returns></returns>
         [HttpGet("check-submitted/{oid}")]
         public async Task<IActionResult> CheckStatus(string oid)
         {
@@ -576,6 +656,11 @@ namespace API.ERP_Portal_RC.Controllers
             return Ok(new { OID = cleanedOid, IsSubmitted = isSubmitted });
         }
 
+        /// <summary>
+        /// Lấy OID của job kế tiếp dựa trên OID hợp đồng chính. ( tiền tố OID - 00x )
+        /// </summary>
+        /// <param name="mainOid"></param>
+        /// <returns></returns>
         [HttpGet("next-job-oid/{mainOid}")]
         public async Task<IActionResult> GetNextOid(string mainOid)
         {
@@ -620,7 +705,13 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.CreateJobAsync(request);
             return StatusCode(result.StatusCode, result);
         }
-
+        /// <summary>
+        /// Kiểm tra trạng thái hiện tại của một job theo referenceId + factorId + entryId.
+        /// </summary>
+        /// <param name="referenceId"></param>
+        /// <param name="factorId"></param>
+        /// <param name="entryId"></param>
+        /// <returns></returns>
         [HttpGet("check-status-job")]
         public async Task<IActionResult> CheckStatus(
             [FromQuery] string referenceId,
@@ -630,7 +721,11 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.GetJobStatusAsync(referenceId, factorId, entryId);
             return StatusCode(result.StatusCode, result);
         }
-
+        /// <summary>
+        /// Đề xuất cấp tài khoản cho khách hàng từ hợp đồng điện tử.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("de-xuat-captk")]
         [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status400BadRequest)]
@@ -672,11 +767,11 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         /// <summary>
-        /// Lấy danh sách các hợp đồng điện tử đang ở trạng thái "Chờ kiểm tra" hoặc "Đã gửi yêu cầu cấp tài khoản" (Mã trạng thái: 101).
+        /// Lấy danh sách hợp đồng đang ở trạng thái 101 (chờ kiểm tra).
         /// </summary>
-        /// <param name="frmDate">Ngày bắt đầu lọc (Định dạng: yyyy-MM-dd). Nếu để trống, hệ thống mặc định lấy dữ liệu từ 30 ngày trước.</param>
-        /// <param name="endDate">Ngày kết thúc lọc (Định dạng: yyyy-MM-dd). Nếu để trống, hệ thống mặc định lấy đến thời điểm hiện tại.</param>
-        /// <returns>
+        /// <param name="frmDate"></param>
+        /// <param name="endDate"></param>
+        /// <returns></returns>
         [HttpGet("waiting-verify-101")]
         public async Task<ActionResult<ApiResponse<IEnumerable<EContract101Response>>>> GetList101(
         [FromQuery] string frmDate = "",

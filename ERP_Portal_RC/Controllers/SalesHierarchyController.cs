@@ -14,14 +14,26 @@ namespace API.ERP_Portal_RC.Controllers
         private readonly ISalesHierarchyService _salesHierarchyService;
         public SalesHierarchyController(ISalesHierarchyService salesHierarchyService)
         {
-         _salesHierarchyService = salesHierarchyService;
+            _salesHierarchyService = salesHierarchyService;
         }
+        /// <summary>
+        /// Show Cây ASM của ERP 
+        /// </summary>
+        /// <param name="clnID"></param>
+        /// <param name="isManager"></param>
+        /// <returns></returns>
         [HttpGet("managers/{clnID}")]
         public async Task<ActionResult<ApiResponse<List<ManagerDto>>>> GetManagers(string clnID = "21:000",bool isManager = false)
         {
             var tree = await _salesHierarchyService.GetManagerTreeAsync(clnID, isManager);
             return Ok(new { success = true, data = tree });
         }
+
+        /// <summary>
+        /// API Đăng Kí Tài Khoản Sale - LOT ERP
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("register")]
         public async Task<IActionResult> RegisterSale([FromBody] SaleRegistrationModel request)
         {
@@ -40,6 +52,11 @@ namespace API.ERP_Portal_RC.Controllers
             }
         }
 
+        /// <summary>
+        /// API Đăng Kí Account Kế Toán - LOT ERP
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("accounting/register")]
         public async Task<IActionResult> RegisterAccounting(
             [FromBody] AccountingRegistrationRequestDto request)

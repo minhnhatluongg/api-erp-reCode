@@ -17,6 +17,7 @@
         public DateTime date_HSSComplete { get; set; }
         public bool isKTTT_2 { get; set; }
         public bool isCheckXHD { get; set; }
+        public bool isDisableCheckXHD { get; set; }
         public bool isCheck { get; set; }
         public bool isBPGN { get; set; }
         public byte IsINS { get; set; }
@@ -65,5 +66,7 @@
         public bool isTool { get; set; } = false;
         public bool isGiaHan { get; set; }
         public bool isCapBu { get; set; }
+        public bool IscheckXuatHoaDon { get; set; }
+        public bool IsDisableXuatHoaDon { get; set; }
     }
 }

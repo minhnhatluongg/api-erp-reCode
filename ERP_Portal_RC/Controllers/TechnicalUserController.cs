@@ -17,6 +17,11 @@ namespace API.ERP_Portal_RC.Controllers
         {
             _codeService = codeService;
         }
+        /// <summary>
+        /// Đăng nhập tài khoản kỹ thuật, trả về JWT.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] TechnicalLoginRequest request)
         {
@@ -29,6 +34,10 @@ namespace API.ERP_Portal_RC.Controllers
             return Ok(ApiResponse<LoginResponseDto>.SuccessResponse(
                 loginResult, "Đăng nhập kỹ thuật thành công."));
         }
+        /// <summary>
+        /// Tạo mã đăng ký mới (yêu cầu role Technical).
+        /// </summary>
+        /// <returns></returns>
         [Authorize(Roles = "Technical")]
         [HttpPost("generate-code")]
         public async Task<IActionResult> GenerateCode()
@@ -47,7 +56,11 @@ namespace API.ERP_Portal_RC.Controllers
                 return BadRequest(ApiResponse.ErrorResponse($"Lỗi khi tạo mã {ex.Message}"));
             }
         }
-
+        /// <summary>
+        /// Đăng ký tài khoản kỹ thuật bằng mã đăng ký hợp lệ.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] TechnicalRegistrationRequest request)
         {

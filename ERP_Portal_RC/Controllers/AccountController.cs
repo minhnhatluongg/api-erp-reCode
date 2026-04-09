@@ -26,7 +26,11 @@ namespace ERP_Portal_RC.Controllers
             _customStore = customStore;
             _logger = logger;
         }
-
+        /// <summary>
+        /// Lấy cây menu theo nhóm quyền và AppSite của user.
+        /// </summary>
+        /// <param name="appSite"></param>
+        /// <returns></returns>
         [HttpGet("menu")]
         [ProducesResponseType(typeof(ApiResponse<MenuResponseDto>), 200)]
         public async Task<IActionResult> GetMenu([FromQuery] string? appSite = null)
@@ -59,7 +63,10 @@ namespace ERP_Portal_RC.Controllers
             }
         }
 
-
+        /// <summary>
+        /// Trả về thông tin user hiện tại từ JWT token.
+        /// </summary>
+        /// <returns></returns>
         [HttpGet("current-user")]
         [ProducesResponseType(typeof(ApiResponse<object>), 200)]
         public IActionResult GetCurrentUser()
@@ -98,6 +105,12 @@ namespace ERP_Portal_RC.Controllers
             }
         }
 
+        /// <summary>
+        /// Kiểm tra tài khoản theo mã số thuế (MST) và CCCD.	
+        /// </summary>
+        /// <param name="menuId"></param>
+        /// <param name="appSite"></param>
+        /// <returns></returns>
         [HttpGet("check-permission/{menuId}")]
         [ProducesResponseType(typeof(ApiResponse<object>), 200)]
         public async Task<IActionResult> CheckPermission(string menuId, [FromQuery] string? appSite = null)
@@ -148,7 +161,12 @@ namespace ERP_Portal_RC.Controllers
                     "Lỗi server khi kiểm tra quyền", 500));
             }
         }
-
+        /// <summary>
+        /// Kiểm tra tài khoản theo mã số thuế (MST) và CCCD.
+        /// </summary>
+        /// <param name="mst"></param>
+        /// <param name="cccd"></param>
+        /// <returns></returns>
         [HttpGet("check-account")]
         public async Task<IActionResult> CheckAccount([FromQuery] string mst, [FromQuery] string? cccd = null)
         {

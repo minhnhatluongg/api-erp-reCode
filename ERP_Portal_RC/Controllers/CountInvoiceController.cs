@@ -15,6 +15,11 @@ namespace API.ERP_Portal_RC.Controllers
         {
             _econtractService = econtractService;
         }
+        /// <summary>
+        /// Đếm số hóa đơn còn lại của 1 MST.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("status")]
         [ProducesResponseType(typeof(ApiResponse<InvCounterResponseDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<InvCounterResponseDto>), StatusCodes.Status404NotFound)]
