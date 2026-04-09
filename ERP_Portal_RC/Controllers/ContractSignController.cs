@@ -113,7 +113,7 @@ namespace API.ERP_Portal_RC.Controllers
 
         /// <summary>
         /// API 2.a: Tiếp nhận trạng thái xử lý từ SignApp (Callback).
-        /// [AllowAnonymous] — SignApp gọi trực tiếp không qua JWT Bearer.
+        /// SignApp gọi trực tiếp không qua JWT Bearer.
         /// </summary>
         [AllowAnonymous]
         [HttpPost("ReceiveSignStatus")]

@@ -21,6 +21,11 @@ namespace ERP_Portal_RC.Controllers
             _logger = logger;
         }
 
+        /// <summary>
+        /// Đăng nhập, trả về JWT token và thông tin phiên.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("login")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(ApiResponse<AuthResponseDto>), 200)]
@@ -298,7 +303,11 @@ namespace ERP_Portal_RC.Controllers
                     "Lỗi server khi lấy thông tin user", 500));
             }
         }
-
+        /// <summary>
+        /// Kiểm tra loginName đã tồn tại trên hệ thống chưa. Trả về bool.
+        /// </summary>
+        /// <param name="loginName"></param>
+        /// <returns></returns>
         [HttpGet("check-exists")]
         public async Task<ActionResult<ApiResponse<bool>>> CheckExists([FromQuery] string loginName)
         {
@@ -324,6 +333,12 @@ namespace ERP_Portal_RC.Controllers
                     500));
             }
         }
+
+        /// <summary>
+        /// Đổi mật khẩu. Trả 401 nếu sai MK cũ, 403 nếu TK vô hiệu hoá, 404 nếu không tìm thấy user.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         [HttpPost("change-password")]
         [ProducesResponseType(typeof(ChangePasswordResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ChangePasswordResponseDto), StatusCodes.Status400BadRequest)]

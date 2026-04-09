@@ -87,7 +87,7 @@ namespace Interface.ReleaseInvoice.Services
                 
                 if (specialTemplate == null)
                 {
-                    specialTemplate = await _templateRepo.GetByFileNameAsync(xsltFileName + ".xslt");
+                    specialTemplate = await _templateRepo.GetByFileNameAsync(xsltFileName);
                 }
                 
                 if (specialTemplate == null)
@@ -148,7 +148,7 @@ namespace Interface.ReleaseInvoice.Services
                 return "VCNB_New.xslt"; 
             
             if (options.IsTaxDocument)
-                return "TNCN_70.xslt"; 
+                return "sys_template_TNCN_70.xslt"; 
             
             if (options.isHangGuiDaiLy)
                 return "HGDL_TT78.xslt"; 

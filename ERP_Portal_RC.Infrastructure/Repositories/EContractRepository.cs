@@ -681,7 +681,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     if (!item.isGiaHan) item.TT4 = TTStatus.TT4_DACAP;
                 }
 
-                // 8. Các flag trạng thái Checkbox
+                // --- LOGIC CHO TT8 (XUẤT HÓA ĐƠN HĐĐT) ---
+                item.isCheckXHD = item.TT8 != "Chưa có yêu cầu Xuất hóa đơn HĐĐT";
+                item.isDisableCheckXHD = (item.TT8 == "Đã gửi yêu cầu xuất hóa đơn" || item.TT8 == "Đã xuất hóa đơn điện tử");
+                // 9. Các flag trạng thái Checkbox cho các cột khác
                 item.ischeckTK = (item.TT3 == TTStatus.TT3_DACAP || item.isGiaHan);
                 item.ischeckPH = (item.TT4 == TTStatus.TT4_DACAP);
                 item.ischeckKNV = (item.TT4 == TTStatus.TT4_KHOANV);

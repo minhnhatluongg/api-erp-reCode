@@ -5,13 +5,6 @@ using System.Data;
 
 namespace ERP_Portal_RC.Infrastructure.Repositories
 {
-    /// <summary>
-    /// Triển khai IContractSignRepository.
-    /// Chịu trách nhiệm duy nhất: truy cập dữ liệu cho nghiệp vụ ký số hợp đồng.
-    ///
-    /// Clean Architecture: Infrastructure phụ thuộc Domain, KHÔNG phụ thuộc Application.
-    /// Tất cả type dùng ở đây đều là Domain entities / primitives.
-    /// </summary>
     public class ContractSignRepository : IContractSignRepository
     {
         private readonly IDbConnectionFactory _dbConnectionFactory;
