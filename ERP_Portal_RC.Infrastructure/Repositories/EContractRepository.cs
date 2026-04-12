@@ -1848,5 +1848,40 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 parameters,
                 commandType: CommandType.StoredProcedure);
         }
+
+        public async Task<(IEnumerable<EContract_Monitor> Data, IEnumerable<SubEmpl> SubEmpl)> GetPagedAsync(string crtUser, string frm, string end, string? search, int? statusFilter, int page, int pageSize)
+        {
+            // Normalize tên công ty (giữ logic cũ)
+            search = search switch
+            {
+                "CÔNG TY TNHH WIN TECH SOLUTION" => "WIN TECH",
+                "CÔNG TY TNHH WIN ONLINE MEDIA" => "WIN ONLINE",
+                _ => search
+            };
+
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            var parameters = new DynamicParameters();
+            parameters.Add("@CrtUser", crtUser);
+            parameters.Add("@Frm_date", frm);
+            parameters.Add("@End_date", end);
+            parameters.Add("@strSearch", search ?? "");
+            parameters.Add("@StatusFilter", statusFilter);
+            parameters.Add("@Page", page);
+            parameters.Add("@PageSize", pageSize);
+
+            using var multi = await conn.QueryMultipleAsync(
+                "wspList_EContracts_Paged",
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                commandTimeout: 120);
+
+            var data = (await multi.ReadAsync<EContract_Monitor>()).ToList();
+
+            var subEmpl = !multi.IsConsumed
+                ? (await multi.ReadAsync<SubEmpl>()).ToList()
+                : new List<SubEmpl>();
+
+            return (data, subEmpl);
+        }
     }
 }

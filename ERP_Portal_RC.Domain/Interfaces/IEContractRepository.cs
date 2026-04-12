@@ -99,5 +99,14 @@ namespace ERP_Portal_RC.Domain.Interfaces
             DateTime frmDate,
             DateTime toDate);
         Task<IEnumerable<EContractWaiting>> GetRawList101Async(string frmDate, string endDate);
+
+        Task<(IEnumerable<EContract_Monitor> Data, IEnumerable<SubEmpl> SubEmpl)> GetPagedAsync(
+        string crtUser,
+        string frm,
+        string end,
+        string? search,
+        int? statusFilter,
+        int page,
+        int pageSize);
     }
 }

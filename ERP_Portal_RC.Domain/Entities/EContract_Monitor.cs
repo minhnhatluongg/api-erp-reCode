@@ -68,5 +68,9 @@
         public bool isCapBu { get; set; }
         public bool IscheckXuatHoaDon { get; set; }
         public bool IsDisableXuatHoaDon { get; set; }
+
+        //Paged 
+        public int TotalCount { get; set; }
+        public int RowNum { get; set; }
     }
 }
