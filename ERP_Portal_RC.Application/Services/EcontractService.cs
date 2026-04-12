@@ -1649,7 +1649,42 @@ namespace ERP_Portal_RC.Application.Services
             });
         }
 
-        
+        public async Task<EContractPagedResponsePage> GetPagedAsync(
+            string userCode, string userName, string grpList, EContractPagedRequest request)
+        {
+            var menuInfo = await _eContractRepository.GetDSMenuByID(userName, grpList);
+            string crtUser = (menuInfo.mode == 1) ? userCode : UserMaster.UserCode;
+
+            string frm = request.FrmDate
+                ?? DateTime.Now.AddDays(-7).ToString("yyyy-MM-dd");
+            string end = request.ToDate
+                ?? DateTime.Now.AddDays(1).ToString("yyyy-MM-dd HH:mm:ss");
+
+            int page = Math.Max(1, request.Page);
+            int pageSize = request.PageSize is > 0 and <= 100
+                ? request.PageSize : 20;
+
+            string? searchKeyword = request.CusTName
+                                 ?? request.CusTTax
+                                 ?? request.NCC
+                                 ?? request.Kinhdoanh;
+
+            int? statusFilter = int.TryParse(request.Status, out int s) ? s : null;
+
+            var (data, subEmpl) = await _eContractRepository.GetPagedAsync(
+                crtUser, frm, end, searchKeyword, statusFilter, page, pageSize);
+
+            var dataList = data.ToList();
+
+            return new EContractPagedResponsePage
+            {
+                Data = dataList,
+                SubEmpl = subEmpl.ToList(),
+                TotalCount = dataList.FirstOrDefault()?.TotalCount ?? 0,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
     }
 }
 

@@ -14,4 +14,6 @@ namespace ERP_Portal_RC.Application.DTOs
         public int Total { get; set; }
         public bool Disable { get; set; }
     }
+
+
 }

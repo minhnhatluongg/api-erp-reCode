@@ -79,6 +79,10 @@ namespace ERP_Portal_RC.Application.Interfaces
 
         Task<ApiResponse<InvCounterResponseDto>> GetInvCounterByMSTAsync(InvCounterRequestDto request);
         Task<IEnumerable<EContract101Response>> GetWaitingContracts(string frmDate, string endDate);
-        
+        Task<EContractPagedResponsePage> GetPagedAsync(
+        string userCode,
+        string userName,
+        string grpList,
+        EContractPagedRequest request);
     } 
 }

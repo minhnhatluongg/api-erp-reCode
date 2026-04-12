@@ -796,6 +796,17 @@ namespace API.ERP_Portal_RC.Controllers
                     new List<string> { ex.Message }));
             }
         }
+
+        [HttpGet("list-paged")]
+        public async Task<IActionResult> GetPaged([FromQuery] EContractPagedRequest request)
+        {
+            var userCode = User.FindFirstValue("UserCode") ?? "";
+            var userName = User.FindFirstValue("UserName") ?? "";
+            var grpList = User.FindFirstValue("GrpList") ?? "";
+
+            var result = await _econtractService.GetPagedAsync(userCode, userName, grpList, request);
+            return Ok(result);
+        }
     }
 }
 
