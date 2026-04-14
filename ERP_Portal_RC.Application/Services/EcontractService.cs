@@ -76,9 +76,25 @@ namespace ERP_Portal_RC.Application.Services
 
                 result = await _eContractRepository.GetEContractsByHierarchyAsync(request.EmplChild, strEmplChild, dateFrom, dateTo, userCode);
             }
+            else if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
+            {
+                var decodedOID = Uri.UnescapeDataString(request.OIDSearch);
+
+                var (data, _) = await _eContractRepository.GetPagedAsync(
+                    crtUser: "%",
+                    frm: "2010-01-01",
+                    end: dateTo,
+                    search: decodedOID,
+                    statusFilter: null,
+                    page: 1,
+                    pageSize: 999
+                );
+
+                result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
+            }
             else if (!string.IsNullOrEmpty(request.CusTName))
             {
-                result = await _eContractRepository.Search(request.CusTName, crtUser, dateFrom, dateTo);
+                result = await _eContractRepository.Search(request.CusTName, crtUser, "2010-01-01", dateTo);
             }
             else
             {
