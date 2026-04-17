@@ -5,7 +5,9 @@ using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Common.Logging;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
+using ERP_Portal_RC.Domain.Interfaces.Accounts_payable;
 using ERP_Portal_RC.Infrastructure.Repositories;
+using ERP_Portal_RC.Infrastructure.Repositories.Accounts_payable;
 using Infrastructure.Repositories;
 using Interface.ReleaseInvoice.Repo;
 using Interface.ReleaseInvoice.Services;
@@ -53,11 +55,12 @@ builder.Services.AddAutoMapper(new[] {
     typeof(AccountMappingProfile).Assembly,
     typeof(AuthMappingProfile).Assembly,
     typeof(MenuMappingProfile).Assembly,
-    typeof(TechnicalMappingProfile).Assembly
+    typeof(TechnicalMappingProfile).Assembly,
+    typeof(ServiceTypeMappingProfile).Assembly
 });
 //HTTPS config
 
-// ── THÊM: HttpClient cho Invoice module
+// HttpClient cho Invoice module
 builder.Services.AddHttpClient("WinInvoiceClient", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["WinInvoice:BaseUrl"]!);
@@ -109,6 +112,7 @@ builder.Services.AddScoped<IIntegrationService, IntegrationService>();
 builder.Services.AddScoped<ICapTaiKhoanService, CreateAccountService>();
 builder.Services.AddScoped<ISignHSMService, SignHSMService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IServiceTypeService, ServiceTypeService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -129,6 +133,7 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<ICreateAccountRepository, CapTaiKhoanRepository>();
 builder.Services.AddScoped<ISignHSMRepository, SignHSMRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddScoped<IServiceTypeRepository, ServiceTypeRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext
