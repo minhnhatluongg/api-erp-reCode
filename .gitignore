@@ -14,3 +14,14 @@ ERP_Portal_RC/appsettings.Development.json
 ## Chặn các file log
 *.log
 *.claude/worktrees/happy-bartik
+*.docx
+
+## Chặn file .env chứa secret
+.env
+.env.*
+!.env.example
+
+## Chặn certificate
+*.pfx
+*.key
+*.pem
