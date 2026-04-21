@@ -7,6 +7,7 @@ namespace API.ERP_Portal_RC.Controllers
 {
     [ApiController]
     [Route("api/service-types")]
+    [ApiExplorerSettings(IgnoreApi = true)] 
     public class ServiceTypesController : ControllerBase
     {
         private readonly IServiceTypeService _service;

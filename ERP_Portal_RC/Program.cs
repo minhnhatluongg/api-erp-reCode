@@ -238,9 +238,15 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //Enable Files
+var uploadPath = builder.Configuration["FileConfig:PhysicalRootPath"] ?? "/app/Attachments";
+// Tự tạo folder nếu chưa tồn tại (tránh crash khi start container lần đầu)
+if (!Directory.Exists(uploadPath))
+{
+    Directory.CreateDirectory(uploadPath);
+}
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(@"D:\Attachments"),
+    FileProvider = new PhysicalFileProvider(uploadPath),
     RequestPath = "/uploads",
     ContentTypeProvider = provider
 });
@@ -275,16 +281,14 @@ else
     });
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsEnvironment("Docker") &&
+    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("AllowAll");
 
 
 // Enable Authentication & Authorization
 app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-
-app.Run();
-

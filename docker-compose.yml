@@ -1,0 +1,104 @@
+services:
+  erp-portal-api:
+    container_name: erp-portal-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: erp-portal-api:latest
+    restart: unless-stopped
+    ports:
+      - "5000:80"   # host:container (HTTP)
+      # - "5001:443" # mở dòng này nếu bật HTTPS trực tiếp trong container
+    env_file:
+      - .env
+    environment:
+      # ---- Runtime ----
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:80
+      DOTNET_RUNNING_IN_CONTAINER: "true"
+      TZ: Asia/Ho_Chi_Minh
+
+      # ---- File paths (Linux) ----
+      FileConfig__PhysicalRootPath: ${FILE_PHYSICAL_ROOT_PATH:-/app/Attachments}
+      FileConfig__BaseUrl: ${FILE_BASE_URL}
+      EContractLogConfig__LogPath: ${ECONTRACT_LOG_PATH:-/app/Logs/EContract}
+      EContractLogConfig__RetentionDays: ${ECONTRACT_LOG_RETENTION_DAYS:-14}
+
+      # ---- JWT ----
+      Jwt__SecretKey: ${JWT_SECRET_KEY}
+      Jwt__Issuer: ${JWT_ISSUER:-ERPPortalAPI}
+      Jwt__Audience: ${JWT_AUDIENCE:-ERPPortalClient}
+      Jwt__AccessTokenExpirationMinutes: "60"
+      Jwt__RefreshTokenExpirationDays: "7"
+
+      # ---- Connection strings ----
+      ConnectionStrings__BosAccount: ${CONN_BOS_BosAccount}
+      ConnectionStrings__BosApproval: ${CONN_BOS_BosApproval}
+      ConnectionStrings__BosAsset: ${CONN_BOS_BosAsset}
+      ConnectionStrings__BosCataloge: ${CONN_BOS_BosCataloge}
+      ConnectionStrings__BosConfigure: ${CONN_BOS_BosConfigure}
+      ConnectionStrings__BosDocument: ${CONN_BOS_BosDocument}
+      ConnectionStrings__BosEVAT: ${CONN_BOS_BosEVAT}
+      ConnectionStrings__BosHumanResource: ${CONN_BOS_BosHumanResource}
+      ConnectionStrings__BosInfo: ${CONN_BOS_BosInfo}
+      ConnectionStrings__BosInventory: ${CONN_BOS_BosInventory}
+      ConnectionStrings__BosManufacture: ${CONN_BOS_BosManufacture}
+      ConnectionStrings__BosOnline: ${CONN_BOS_BosOnline}
+      ConnectionStrings__BosSales: ${CONN_BOS_BosSales}
+      ConnectionStrings__BosSupply: ${CONN_BOS_BosSupply}
+      ConnectionStrings__BosWarehouseData: ${CONN_BOS_BosWarehouseData}
+      ConnectionStrings__BosEVATExt: ${CONN_BOS_BosEVATExt}
+      ConnectionStrings__Bos235: ${CONN_BOS_Bos235}
+      ConnectionStrings__BosControlEVAT: ${CONN_BOS_BosControlEVAT}
+      ConnectionStrings__Server234: ${CONN_Server234}
+
+      # ---- SMTP ----
+      SmtpSettings__Host: ${SMTP_HOST}
+      SmtpSettings__Port: ${SMTP_PORT}
+      SmtpSettings__EnableSsl: "false"
+      SmtpSettings__SenderEmail: ${SMTP_SENDER_EMAIL}
+      SmtpSettings__SenderPassword: ${SMTP_SENDER_PASSWORD}
+      SmtpSettings__SenderDisplayName: "WIN TECH ERP"
+      SmtpSettings__ReceiverKeToan: ${SMTP_RECEIVER_KETOAN}
+      SmtpSettings__PortalBaseUrl: ${PORTAL_BASE_URL}
+
+      # ---- AppSettings ----
+      AppSettings__BaseUrl: ${APP_BASE_URL}
+      AppSettings__ApiUser: ${APP_API_USER}
+      AppSettings__ApiPassword: ${APP_API_PASSWORD}
+
+      # ---- WebApp ----
+      WebApp__BaseUrl: ${WEBAPP_BASE_URL}
+      WebApp__AuthUser: ${WEBAPP_AUTH_USER}
+      WebApp__AuthPass: ${WEBAPP_AUTH_PASS}
+
+      # ---- DbCredentials ----
+      DbCredentials__User: ${DB_CRED_USER}
+      DbCredentials__Password: ${DB_CRED_PASSWORD}
+
+      # ---- WinInvoice ----
+      WinInvoice__BaseUrl: ${WIN_INVOICE_BASE_URL}
+      WinInvoice__ClientId: ${WIN_INVOICE_CLIENT_ID}
+      WinInvoice__ClientSecret: ${WIN_INVOICE_CLIENT_SECRET}
+      WinInvoice__InvName: ${WIN_INVOICE_INV_NAME}
+      WinInvoice__InvSerial: ${WIN_INVOICE_INV_SERIAL}
+
+      # ---- ERP Portal ----
+      ERPPortal__BaseUrl: ${ERP_PORTAL_BASE_URL}
+
+      # ---- HR Account API ----
+      HRAccountApi__BaseUrl: ${HR_ACCOUNT_BASE_URL}
+      HRAccountApi__ApiKey: ${HR_ACCOUNT_API_KEY}
+
+    volumes:
+      - ./data/attachments:/app/Attachments
+      - ./data/logs:/app/Logs
+      - ./data/uploads:/app/Uploads
+      # - ./certs:/https:ro   # mở dòng này nếu bật HTTPS trực tiếp trong container
+    networks:
+      - erp-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:80/swagger/v1/swagger.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 

@@ -27,7 +27,7 @@
 - 🏗️ **Clean Architecture** - Tách biệt rõ ràng giữa Domain, Application, và Infrastructure layers
 - 📚 **Swagger UI** - API documentation tự động và interactive
 - 🔄 **AutoMapper** - Object-to-object mapping tự động
-- 🐳 **Docker Ready** - Sẵn sàng để containerize và deploy
+- 🐳 **Docker Ready** - Multi-stage build, non-root user, healthcheck, secret qua env
 
 ## 🛠️ Tech Stack
 
@@ -166,11 +166,115 @@ Mặc định API cho phép tất cả origins. Để bảo mật hơn trong pro
 
 ## 🐳 Docker Support
 
-Build và chạy với Docker:
+Project đã được Dockerize hoàn chỉnh với multi-stage build, non-root user, healthcheck và inject secret qua biến môi trường. Xem chi tiết trong [DOCKER.md](./DOCKER.md).
+
+### ⚡ Quick Start với Docker Compose
+
+**Bước 1 — Chuẩn bị file `.env`**
+
+Copy file mẫu và điền giá trị thật (password DB, JWT secret, SMTP, API keys...):
+
 ```bash
-docker build -t erp-portal-api .
-docker run -p 5000:80 erp-portal-api
+cp .env.example .env
+# sau đó mở .env bằng editor và điền các giá trị
 ```
+
+> ⚠️ File `.env` đã được `.gitignore` — KHÔNG BAO GIỜ commit file này lên git.
+
+**Bước 2 — Build & Run**
+
+```bash
+# Build image và start container ở background
+docker compose up -d --build
+
+# Xem log realtime
+docker compose logs -f erp-portal-api
+
+# Kiểm tra trạng thái (cột STATUS phải là "healthy")
+docker compose ps
+
+# Dừng & xoá
+docker compose down
+```
+
+**Bước 3 — Truy cập API**
+
+- Swagger UI: <http://localhost:5000>
+- Swagger JSON: <http://localhost:5000/swagger/v1/swagger.json>
+
+### 🛠️ Build thủ công (không dùng compose)
+
+```bash
+# Build image
+docker build -t erp-portal-api:latest .
+
+# Run
+docker run -d \
+  --name erp-portal-api \
+  -p 5000:80 \
+  --env-file .env \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  -e FileConfig__PhysicalRootPath=/app/Attachments \
+  -e EContractLogConfig__LogPath=/app/Logs/EContract \
+  -v $(pwd)/data/attachments:/app/Attachments \
+  -v $(pwd)/data/logs:/app/Logs \
+  erp-portal-api:latest
+```
+
+### 📐 Kiến trúc Docker
+
+| Stage | Base image | Mục đích |
+|---|---|---|
+| `build` | `mcr.microsoft.com/dotnet/sdk:8.0` | Restore NuGet + build solution |
+| `publish` | kế thừa `build` | `dotnet publish` tạo artifacts |
+| `runtime` | `mcr.microsoft.com/dotnet/aspnet:8.0` | Image cuối (~250 MB), chạy dưới user non-root `appuser` |
+
+### 🔐 Inject secret qua biến môi trường
+
+ASP.NET Core tự động map env vars vào `IConfiguration` theo quy tắc **`__` = `:`**.
+
+Ví dụ:
+```bash
+ConnectionStrings__BosAccount=Server=...       →  Configuration["ConnectionStrings:BosAccount"]
+Jwt__SecretKey=xxxx                            →  Configuration["Jwt:SecretKey"]
+SmtpSettings__Host=mail.example.com            →  Configuration["SmtpSettings:Host"]
+```
+
+Toàn bộ secret (JWT key, connection strings, SMTP password, API keys) được inject qua `.env` → `docker-compose.yml` → container. **Không hard-code trong `appsettings.json`** khi deploy production.
+
+### 📂 Volumes persist
+
+Data được mount ra host để không mất khi rebuild container:
+
+| Host path | Container path | Dùng cho |
+|---|---|---|
+| `./data/attachments` | `/app/Attachments` | File upload của user |
+| `./data/logs` | `/app/Logs` | Log file (EContract, ...) |
+| `./data/uploads` | `/app/Uploads` | Thư mục upload phụ |
+
+### 🌐 HTTPS trong container
+
+App trong container chỉ listen HTTP port `80`. Có 2 cách terminate TLS:
+
+1. **Khuyến nghị:** Đặt reverse proxy (Nginx / Traefik / Caddy) phía trước container, proxy lo HTTPS.
+2. Hoặc config Kestrel với certificate `.pfx` (xem chi tiết trong [DOCKER.md](./DOCKER.md)).
+
+### ✅ Health Check
+
+Container tự động kiểm tra sức khoẻ mỗi 30s qua endpoint `/swagger/v1/swagger.json`. Dùng lệnh sau để xem trạng thái:
+
+```bash
+docker inspect --format='{{.State.Health.Status}}' erp-portal-api
+```
+
+### 📋 Checklist trước khi deploy
+
+- [ ] File `.env` đã có đầy đủ secret và được `.gitignore`
+- [ ] Password DB, JWT secret, API key đã được **rotate** nếu đã lộ trên git trước đó
+- [ ] Đã set `ASPNETCORE_ENVIRONMENT=Production`
+- [ ] Đã có reverse proxy với HTTPS phía trước
+- [ ] CORS policy đã giới hạn origin thay vì `AllowAll`
+- [ ] Volume `./data/` đã được backup định kỳ
 
 ## 📝 License
 
