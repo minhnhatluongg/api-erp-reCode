@@ -56,7 +56,8 @@ builder.Services.AddAutoMapper(new[] {
     typeof(AuthMappingProfile).Assembly,
     typeof(MenuMappingProfile).Assembly,
     typeof(TechnicalMappingProfile).Assembly,
-    typeof(ServiceTypeMappingProfile).Assembly
+    typeof(ServiceTypeMappingProfile).Assembly,
+    typeof(TvanRenewalProfile).Assembly
 });
 //HTTPS config
 
@@ -113,6 +114,7 @@ builder.Services.AddScoped<ICapTaiKhoanService, CreateAccountService>();
 builder.Services.AddScoped<ISignHSMService, SignHSMService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IServiceTypeService, ServiceTypeService>();
+builder.Services.AddScoped<ITvanRenewalService, TvanRenewalService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -134,6 +136,7 @@ builder.Services.AddScoped<ICreateAccountRepository, CapTaiKhoanRepository>();
 builder.Services.AddScoped<ISignHSMRepository, SignHSMRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IServiceTypeRepository, ServiceTypeRepository>();
+builder.Services.AddScoped<ITvanRenewalRepository, TvanRenewalRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext
@@ -262,8 +265,8 @@ if (app.Environment.IsDevelopment())
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Portal API V1");
         options.RoutePrefix = "";
         options.DocumentTitle = "ERP Portal API Documentation";
-        options.DefaultModelsExpandDepth(2);
-        options.DefaultModelExpandDepth(2);
+        options.DefaultModelsExpandDepth(-1);
+        options.DefaultModelExpandDepth(-1);
         options.DisplayRequestDuration();
         options.EnableDeepLinking();
         options.EnableFilter();
@@ -292,3 +295,8 @@ app.UseCors("AllowAll");
 
 // Enable Authentication & Authorization
 app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();

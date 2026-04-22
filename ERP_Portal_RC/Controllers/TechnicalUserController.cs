@@ -10,6 +10,7 @@ namespace API.ERP_Portal_RC.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     public class TechnicalUserController : Controller
     {
         private readonly IRegistrationCodeService _codeService;
