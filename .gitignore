@@ -25,3 +25,13 @@ ERP_Portal_RC/appsettings.Development.json
 *.pfx
 *.key
 *.pem
+
+# Ignore các folder Log và bên trong.
+Logs/
+*.log
+
+# Deploy scripts (chứa IP/path nội bộ)
+deploy.bat
+deploy-remote.ps1
+_publish_output/
+Scripts/

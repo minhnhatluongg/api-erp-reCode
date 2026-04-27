@@ -38,6 +38,9 @@ var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".xslt"] = "text/xml";
 provider.Mappings[".json"] = "application/json";
 
+builder.Services.Configure<FileUploadConfig>(
+    builder.Configuration.GetSection(FileUploadConfig.Section));
+
 // Configure Session
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -115,6 +118,10 @@ builder.Services.AddScoped<ISignHSMService, SignHSMService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IServiceTypeService, ServiceTypeService>();
 builder.Services.AddScoped<ITvanRenewalService, TvanRenewalService>();
+builder.Services.AddScoped<IVirusScanService, ClamAvVirusScanService>();
+builder.Services.AddScoped<IVirusScanService, NoOpVirusScanService>();
+builder.Services.AddScoped<IChunkUploadService, ChunkUploadService>();
+builder.Services.AddScoped<IFileValidationService, FileValidationService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -241,17 +248,23 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //Enable Files
-var uploadPath = builder.Configuration["FileConfig:PhysicalRootPath"] ?? "/app/Attachments";
+var uploadPath = builder.Configuration["FileUpload:PhysicalRootPath"] ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\Attachments";
 // Tự tạo folder nếu chưa tồn tại (tránh crash khi start container lần đầu)
 if (!Directory.Exists(uploadPath))
 {
     Directory.CreateDirectory(uploadPath);
 }
+// Sửa lại FileProvider để nó map đúng cấu trúc thư mục
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadPath),
-    RequestPath = "/uploads",
-    ContentTypeProvider = provider
+    RequestPath = "/uploads", 
+    ContentTypeProvider = provider,
+    ServeUnknownFileTypes = true,
+    OnPrepareResponse = ctx =>
+    {
+        ctx.Context.Response.Headers.Append("Cache-Control", "public,max-age=604800");
+    }
 });
 // Enable Session
 app.UseSession();

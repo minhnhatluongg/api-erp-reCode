@@ -21,7 +21,7 @@
     <PackageReference Include="FluentAssertions" Version="6.12.1" />
 
     <!-- Logger abstraction cho các service có ILogger<T> -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+	  <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
 
     <!-- Code coverage -->
     <PackageReference Include="coverlet.collector" Version="6.0.2">
