@@ -1095,14 +1095,14 @@ namespace ERP_Portal_RC.Application.Services
         }
 
         public async Task<ApiResponse<List<string>>> UploadContractFilesAsync(
-    IFormFileCollection files, string oid)
+            IFormFileCollection files, string oid, CancellationToken ct)
         {
             var fileLinks = new List<string>();
             string baseUrl = _configuration["FileConfig:BaseUrl"];
 
             foreach (var file in files)
             {
-                string relativePath = await _fileStorageService.UploadFileAsync(file, oid);
+                string relativePath = await _fileStorageService.UploadFileAsync(file, oid, ct);
                 if (relativePath != null)
                 {
                     string normalizedPath = relativePath.TrimStart('/')
@@ -1701,6 +1701,8 @@ namespace ERP_Portal_RC.Application.Services
                 PageSize = pageSize
             };
         }
+
+       
     }
 }
 
