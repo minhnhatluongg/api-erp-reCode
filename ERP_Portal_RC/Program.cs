@@ -130,6 +130,7 @@ builder.Services.AddScoped<ICustomStore, CustomStore>();
 builder.Services.AddScoped<ISalesHierarchyRepository, SalesHierarchyRepository>();
 builder.Services.AddScoped<IDSignaturesRepository, DSignaturesRepository>();
 builder.Services.AddScoped<IEContractRepository, EContractRepository>();
+builder.Services.AddScoped<IEContractV26Repository, EContractV26Repository>();
 builder.Services.AddScoped<ITechnicalUserRepository, TechnicalUserRepository>();
 builder.Services.AddScoped<IRuleRepository,RuleRepository>();
 builder.Services.AddScoped<IXmlDataRepository, XmlDataRepository>();
