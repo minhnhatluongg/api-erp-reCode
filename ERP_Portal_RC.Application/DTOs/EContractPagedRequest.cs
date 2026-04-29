@@ -11,20 +11,17 @@ namespace ERP_Portal_RC.Application.DTOs
         public string? FrmDate { get; set; }
         public string? ToDate { get; set; }
 
-        // Search theo thông tin khách hàng -> truyền vào SP @strSearch
-        public string? CusTName { get; set; }
-        public string? CusTTax { get; set; }
-        public string? NCC { get; set; }
-        public string? Kinhdoanh { get; set; }
+        /// <summary>
+        /// Từ khoá tìm kiếm duy nhất — SP sẽ tìm trên CusName / CusTax / OID.
+        /// Bind trực tiếp từ query string: ?SearchKeyword=...
+        /// </summary>
+        public string? SearchKeyword { get; set; }
 
-        // Filter trạng thái -> xử lý sau khi SP trả về (như code cũ)
+        // Filter trạng thái
         public string? Status { get; set; }
 
         public bool isManager { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 20;
-
-        // Chỉ dùng nội bộ - không phải search keyword
-        public string? SearchKeyword => CusTName ?? CusTTax ?? NCC ?? Kinhdoanh;
     }
 }

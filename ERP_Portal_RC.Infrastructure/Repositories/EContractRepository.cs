@@ -1870,7 +1870,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@PageSize", pageSize);
 
             using var multi = await conn.QueryMultipleAsync(
-                "wspList_EContracts_Paged",
+                "wspList_EContracts_PagedV26",
                 parameters,
                 commandType: CommandType.StoredProcedure,
                 commandTimeout: 120);

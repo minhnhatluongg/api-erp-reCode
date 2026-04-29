@@ -4,6 +4,7 @@ using ERP_Portal_RC.Application.DTOs.Count_Invoice;
 using ERP_Portal_RC.Application.DTOs.Integration_Incom;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
+using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.EntitiesIntergration;
 using ERP_Portal_RC.Domain.Enum;
@@ -25,7 +26,7 @@ using System.Transactions;
 using System.Xml;
 using System.Xml.Xsl;
 using static ERP_Portal_RC.Domain.Enum.PublicEnum;
-using ERP_Portal_RC.Domain.Common;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ERP_Portal_RC.Application.Services
 {
@@ -67,23 +68,40 @@ namespace ERP_Portal_RC.Application.Services
             var dateTo = !string.IsNullOrEmpty(request.ToDate) ? request.ToDate : DateTime.Now.AddDays(1).ToString("yyyy-MM-dd");
 
             string crtUser = (resultMenu?.mode == 1 || request.IsUser == "1") ? userCode : "%";
+            var decodedOID = "";
 
             ListEcontractViewModel result;
-            if (!string.IsNullOrEmpty(request.EmplChild) && request.EmplChild != "null")
-            {
-                string strEmplChild = (string.IsNullOrEmpty(request.StrEmplChild) || request.StrEmplChild == "null")
-                    ? userCode : request.StrEmplChild;
+            //if (!string.IsNullOrEmpty(request.EmplChild) && request.EmplChild != "null")
+            //{
+            //    string strEmplChild = (string.IsNullOrEmpty(request.StrEmplChild) || request.StrEmplChild == "null")
+            //        ? userCode : request.StrEmplChild;
 
-                result = await _eContractRepository.GetEContractsByHierarchyAsync(request.EmplChild, strEmplChild, dateFrom, dateTo, userCode);
-            }
-            else if (!string.IsNullOrEmpty(request.CusTName))
+            //    result = await _eContractRepository.GetEContractsByHierarchyAsync(request.EmplChild, strEmplChild, dateFrom, dateTo, userCode);
+            //}
+            //else
+            if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
             {
-                result = await _eContractRepository.Search(request.CusTName, crtUser, dateFrom, dateTo);
+                 decodedOID = Uri.UnescapeDataString(request.OIDSearch);
             }
-            else
-            {
-                result = await _eContractRepository.GetAllList(crtUser, dateFrom, dateTo);
-            }
+            var (data, _) = await _eContractRepository.GetPagedAsync(
+                    crtUser: userCode,
+                    frm: dateFrom,
+                    end: dateTo,
+                    search: decodedOID,
+                    statusFilter: null,
+                    page: 1,
+                    pageSize: 999
+                );
+            result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
+
+            //else if (!string.IsNullOrEmpty(request.CusTName))
+            //{
+            //    result = await _eContractRepository.Search(request.CusTName, crtUser, "2010-01-01", dateTo);
+            //}
+            //else
+            //{
+            //    result = await _eContractRepository.GetAllList(crtUser, dateFrom, dateTo);
+            //}
 
             if (result?.lstMonitor == null) return new EContractServiceResult { Total = 0, Data = new List<EContract_Monitor>() };
 
@@ -1664,10 +1682,10 @@ namespace ERP_Portal_RC.Application.Services
             int pageSize = request.PageSize is > 0 and <= 100
                 ? request.PageSize : 20;
 
-            string? searchKeyword = request.CusTName
-                                 ?? request.CusTTax
-                                 ?? request.NCC
-                                 ?? request.Kinhdoanh;
+            // SearchKeyword bind trực tiếp từ query string — null nếu không truyền
+            string? searchKeyword = string.IsNullOrWhiteSpace(request.SearchKeyword)
+                ? null
+                : request.SearchKeyword.Trim();
 
             int? statusFilter = int.TryParse(request.Status, out int s) ? s : null;
 
