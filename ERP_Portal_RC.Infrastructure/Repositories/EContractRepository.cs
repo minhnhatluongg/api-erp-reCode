@@ -742,24 +742,49 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             using var trans = con.BeginTransaction();
             try
             {
-                // 1. Xóa thông tin trình ký
-                int delZsgn = await con.ExecuteAsync(
+                if(model.OID == null)
+                    return (false, "OID không được phép null.", null);
+                string variant19 = model.OID.Trim();
+                // 2. Kiểm tra case ĐÃ XUẤT HÓA ĐƠN
+                // Điều kiện: EntryID = 'JB:010', FactorID = 'JOB_00005', SignNumb = 201 và khớp Variant19
+                string checkSql = @"
+                    SELECT COUNT(1) 
+                    FROM BosApproval.dbo.zsgn_EContractJobs 
+                    WHERE Variant19 = @Variant19 
+                      AND EntryID = 'JB:010' 
+                      AND FactorID = 'JOB_00005' 
+                      AND SignNumb = 201";
+
+                int hasExported = await con.ExecuteScalarAsync<int>(checkSql, new { Variant19 = variant19 }, trans);
+
+                if (hasExported > 0)
+                {
+                    return (false, $"Không thể gỡ ký vì hóa đơn đã được xuất (Hệ thống tìm thấy bước SignNumb 201 cho nghiệp vụ JB:010).", null);
+                }
+
+                // 3. Thực hiện gỡ ký - Xóa thông tin trình ký tại zsgn_webContracts
+                int delZsgnWeb = await con.ExecuteAsync(
                     "DELETE FROM BosApproval.dbo.zsgn_webContracts WHERE OID = @OID",
                     new { model.OID }, trans);
 
-                // 2. Xóa thông tin Public (Hợp đồng đã ký)
+                // 4. Xóa thông tin tại zsgn_EContractJobs dựa trên Variant19 (Theo yêu cầu where thẳng theo Variant19)
+                int delZsgnJobs = await con.ExecuteAsync(
+                    "DELETE FROM BosApproval.dbo.zsgn_EContractJobs WHERE Variant19 = @Variant19",
+                    new { Variant19 = variant19 }, trans);
+
+                // 5. Xóa thông tin Public (Hợp đồng đã ký)
                 int delPublic = await con.ExecuteAsync(
                     "DELETE FROM BosControlEVAT.dbo.ECtr_PublicInfo WHERE InvcCode = @OID",
                     new { model.OID }, trans);
 
-                string status = (delZsgn > 0 || delPublic > 0) ? "DELETED" : "NO_ACTION";
-                string msg = $"Kết quả: {delZsgn} dòng zsgn, {delPublic} dòng PublicInfo đã được xử lý.";
+                string status = (delZsgnWeb > 0 || delZsgnJobs > 0 || delPublic > 0) ? "DELETED" : "NO_ACTION";
+                string msg = $"Kết quả: {delZsgnWeb} dòng web, {delZsgnJobs} dòng jobs (Variant19: {variant19}), {delPublic} dòng Public đã xử lý.";
 
-                // 3. Ghi Log Unsign
+                // 6. Ghi Log Unsign
                 await con.ExecuteAsync(@"
-                INSERT INTO BosControlEVAT.dbo.ECtr_UnsignLogs 
-                (OID, CorrelationId, Reason, RequestedBy, FullName, [Role], ActionStatus, ActionMessage)
-                VALUES (@OID, @CorrelationId, @Reason, @RequestedBy, @FullName, @Role, @status, @msg)",
+                    INSERT INTO BosControlEVAT.dbo.ECtr_UnsignLogs 
+                    (OID, CorrelationId, Reason, RequestedBy, FullName, [Role], ActionStatus, ActionMessage)
+                    VALUES (@OID, @CorrelationId, @Reason, @RequestedBy, @FullName, @Role, @status, @msg)",
                     new
                     {
                         model.OID,
@@ -773,7 +798,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     }, trans);
 
                 trans.Commit();
-                return (true, msg, new { delZsgn, delPublic, status });
+                return (true, msg, new { delZsgnWeb, delZsgnJobs, delPublic, status });
             }
             catch (Exception)
             {
