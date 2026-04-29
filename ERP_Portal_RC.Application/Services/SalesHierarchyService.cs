@@ -104,12 +104,12 @@ namespace ERP_Portal_RC.Application.Services
             {
                 throw new ArgumentException("FullName, Email are required fields.");
             }
-            var isValid = await _registrationCodeService.ValidateCodeAsync(request.RegistrationCode);
-            if (!isValid)
-            {
-                throw new ArgumentException("Mã đăng ký không hợp lệ, đã được sử dụng hoặc hết hạn.");
-            }
-            await _registrationCodeService.ValidateAndUseCodeAsync(request.RegistrationCode, request.Email);
+            //var isValid = await _registrationCodeService.ValidateCodeAsync(request.RegistrationCode);
+            //if (!isValid)
+            //{
+            //    throw new ArgumentException("Mã đăng ký không hợp lệ, đã được sử dụng hoặc hết hạn.");
+            //}
+            //await _registrationCodeService.ValidateAndUseCodeAsync(request.RegistrationCode, request.Email);
             if (request.IsCreateAccount)
             {
                 if (request.LoginName?.Length < 5) throw new Exception("Tên đăng nhập phải từ 5 ký tự.");
@@ -166,7 +166,7 @@ namespace ERP_Portal_RC.Application.Services
             {
                 NewEmployeeID = newEmplId,
                 NewUserCode = newUserCode,
-                CodeLogin = request.RegistrationCode,
+                //CodeLogin = request.LoginName,
                 ExternalApiWarning = externalWarning,
             };
         }

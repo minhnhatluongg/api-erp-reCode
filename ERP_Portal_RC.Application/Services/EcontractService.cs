@@ -81,7 +81,7 @@ namespace ERP_Portal_RC.Application.Services
             //else
             if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
             {
-                 decodedOID = Uri.UnescapeDataString(request.OIDSearch);
+                decodedOID = Uri.UnescapeDataString(request.OIDSearch);
             }
             var (data, _) = await _eContractRepository.GetPagedAsync(
                     crtUser: userCode,
@@ -1097,14 +1097,14 @@ namespace ERP_Portal_RC.Application.Services
         }
 
         public async Task<ApiResponse<List<string>>> UploadContractFilesAsync(
-    IFormFileCollection files, string oid)
+            IFormFileCollection files, string oid, CancellationToken ct)
         {
             var fileLinks = new List<string>();
             string baseUrl = _configuration["FileConfig:BaseUrl"];
 
             foreach (var file in files)
             {
-                string relativePath = await _fileStorageService.UploadFileAsync(file, oid);
+                string relativePath = await _fileStorageService.UploadFileAsync(file, oid, ct);
                 if (relativePath != null)
                 {
                     string normalizedPath = relativePath.TrimStart('/')
@@ -1703,6 +1703,8 @@ namespace ERP_Portal_RC.Application.Services
                 PageSize = pageSize
             };
         }
+
+       
     }
 }
 

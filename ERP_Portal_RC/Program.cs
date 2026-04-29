@@ -5,7 +5,9 @@ using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Common.Logging;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
+using ERP_Portal_RC.Domain.Interfaces.Accounts_payable;
 using ERP_Portal_RC.Infrastructure.Repositories;
+using ERP_Portal_RC.Infrastructure.Repositories.Accounts_payable;
 using Infrastructure.Repositories;
 using Interface.ReleaseInvoice.Repo;
 using Interface.ReleaseInvoice.Services;
@@ -36,6 +38,9 @@ var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".xslt"] = "text/xml";
 provider.Mappings[".json"] = "application/json";
 
+builder.Services.Configure<FileUploadConfig>(
+    builder.Configuration.GetSection(FileUploadConfig.Section));
+
 // Configure Session
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -53,11 +58,13 @@ builder.Services.AddAutoMapper(new[] {
     typeof(AccountMappingProfile).Assembly,
     typeof(AuthMappingProfile).Assembly,
     typeof(MenuMappingProfile).Assembly,
-    typeof(TechnicalMappingProfile).Assembly
+    typeof(TechnicalMappingProfile).Assembly,
+    typeof(ServiceTypeMappingProfile).Assembly,
+    typeof(TvanRenewalProfile).Assembly
 });
 //HTTPS config
 
-// ── THÊM: HttpClient cho Invoice module
+// HttpClient cho Invoice module
 builder.Services.AddHttpClient("WinInvoiceClient", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["WinInvoice:BaseUrl"]!);
@@ -109,6 +116,12 @@ builder.Services.AddScoped<IIntegrationService, IntegrationService>();
 builder.Services.AddScoped<ICapTaiKhoanService, CreateAccountService>();
 builder.Services.AddScoped<ISignHSMService, SignHSMService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IServiceTypeService, ServiceTypeService>();
+builder.Services.AddScoped<ITvanRenewalService, TvanRenewalService>();
+builder.Services.AddScoped<IVirusScanService, ClamAvVirusScanService>();
+builder.Services.AddScoped<IVirusScanService, NoOpVirusScanService>();
+builder.Services.AddScoped<IChunkUploadService, ChunkUploadService>();
+builder.Services.AddScoped<IFileValidationService, FileValidationService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -129,6 +142,8 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<ICreateAccountRepository, CapTaiKhoanRepository>();
 builder.Services.AddScoped<ISignHSMRepository, SignHSMRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddScoped<IServiceTypeRepository, ServiceTypeRepository>();
+builder.Services.AddScoped<ITvanRenewalRepository, TvanRenewalRepository>();
 
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext
@@ -233,11 +248,23 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //Enable Files
+var uploadPath = builder.Configuration["FileUpload:PhysicalRootPath"] ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\Attachments";
+// Tự tạo folder nếu chưa tồn tại (tránh crash khi start container lần đầu)
+if (!Directory.Exists(uploadPath))
+{
+    Directory.CreateDirectory(uploadPath);
+}
+// Sửa lại FileProvider để nó map đúng cấu trúc thư mục
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(@"D:\Attachments"),
-    RequestPath = "/uploads",
-    ContentTypeProvider = provider
+    FileProvider = new PhysicalFileProvider(uploadPath),
+    RequestPath = "/uploads", 
+    ContentTypeProvider = provider,
+    ServeUnknownFileTypes = true,
+    OnPrepareResponse = ctx =>
+    {
+        ctx.Context.Response.Headers.Append("Cache-Control", "public,max-age=604800");
+    }
 });
 // Enable Session
 app.UseSession();
@@ -251,8 +278,8 @@ if (app.Environment.IsDevelopment())
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Portal API V1");
         options.RoutePrefix = "";
         options.DocumentTitle = "ERP Portal API Documentation";
-        options.DefaultModelsExpandDepth(2);
-        options.DefaultModelExpandDepth(2);
+        options.DefaultModelsExpandDepth(-1);
+        options.DefaultModelExpandDepth(-1);
         options.DisplayRequestDuration();
         options.EnableDeepLinking();
         options.EnableFilter();
@@ -270,7 +297,11 @@ else
     });
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsEnvironment("Docker") &&
+    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("AllowAll");
 
@@ -282,4 +313,3 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-

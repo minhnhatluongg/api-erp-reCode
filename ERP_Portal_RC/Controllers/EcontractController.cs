@@ -529,7 +529,7 @@ namespace API.ERP_Portal_RC.Controllers
         /// <returns></returns>
         [HttpPost("upload-files")]
         [DisableRequestSizeLimit]
-        public async Task<IActionResult> UploadFiles(IFormFileCollection files, [FromQuery] string oid)
+        public async Task<IActionResult> UploadFiles(IFormFileCollection files, [FromQuery] string oid, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(oid))
                 return BadRequest(ApiResponse<object>.ErrorResponse("Thiếu OID của hợp đồng."));
@@ -538,7 +538,7 @@ namespace API.ERP_Portal_RC.Controllers
             {
                 return BadRequest(ApiResponse<object>.ErrorResponse("Không có file nào được chọn."));
             }
-            var response = await _econtractService.UploadContractFilesAsync(files, oid);
+            var response = await _econtractService.UploadContractFilesAsync(files, oid, ct);
             return Ok(response);
         }
         /// <summary>

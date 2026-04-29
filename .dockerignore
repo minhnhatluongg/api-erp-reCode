@@ -1,0 +1,44 @@
+# Build output
+**/bin/
+**/obj/
+**/out/
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Logs & temp
+**/Logs/
+**/*.log
+**/Uploads/
+
+# Docs (không cần vào image)
+*.md
+*.docx
+LICENSE
+
+# Secrets (BẮT BUỘC)
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/appsettings.json
+**/secrets.json
+**/*.pfx
+**/*.key
+**/*.pem
+
+# Test project (nếu không muốn đưa vào image production)
+ERP_Portal_RC.Application.Tests/

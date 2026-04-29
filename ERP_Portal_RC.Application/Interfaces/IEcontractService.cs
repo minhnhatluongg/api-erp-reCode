@@ -59,7 +59,7 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task HandleAutomaticJobAsync(EContractDetailsViewModel model, EContractHistoryRaw2 raw, string oid, string kt);
         Task<PagedResponse<DepartmentDTO>> GetDepartmentsPagedAsync(string operDeptList, int pageNumber, int pageSize);
         Task<ApiResponse<List<EContractDetailDTO>>> VerifyJobDetailsAsync(string cusTax, string oid);
-        Task<ApiResponse<List<string>>> UploadContractFilesAsync(IFormFileCollection files, string oid);
+        Task<ApiResponse<List<string>>> UploadContractFilesAsync(IFormFileCollection files, string oid, CancellationToken cancellationToken);
         Task<ApiResponse<object>> SaveJobAsync(SaveJobRequestDto request, string userCode);
         Task<ApiResponse<object>> ApproveJobNowAsync(ApproveJobRequestDto request, string userCode, string fullName);
         Task<EContractsViewModel> GetContractDetailForDisplayAsync(string oid, string userCode, string grpList, string firstClaimValue);

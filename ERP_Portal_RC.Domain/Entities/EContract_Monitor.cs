@@ -7,6 +7,8 @@
         public string? CustomerID { get; set; }
         public string? CusName { get; set; }
         public string? CusTax { get; set; }
+        public string? CusPeople_Sign { get; set; }
+        public string? CusPosition_BySign { get; set; }
         public string? DESCRIP { get; set; }
         public string? SaleEmID { get; set; }
         public int CurrSignNumb { get; set; }
