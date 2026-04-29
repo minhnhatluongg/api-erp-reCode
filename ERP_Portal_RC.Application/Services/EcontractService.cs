@@ -67,39 +67,40 @@ namespace ERP_Portal_RC.Application.Services
             var dateTo = !string.IsNullOrEmpty(request.ToDate) ? request.ToDate : DateTime.Now.AddDays(1).ToString("yyyy-MM-dd");
 
             string crtUser = (resultMenu?.mode == 1 || request.IsUser == "1") ? userCode : "%";
+            var decodedOID = "";
 
             ListEcontractViewModel result;
-            if (!string.IsNullOrEmpty(request.EmplChild) && request.EmplChild != "null")
-            {
-                string strEmplChild = (string.IsNullOrEmpty(request.StrEmplChild) || request.StrEmplChild == "null")
-                    ? userCode : request.StrEmplChild;
+            //if (!string.IsNullOrEmpty(request.EmplChild) && request.EmplChild != "null")
+            //{
+            //    string strEmplChild = (string.IsNullOrEmpty(request.StrEmplChild) || request.StrEmplChild == "null")
+            //        ? userCode : request.StrEmplChild;
 
-                result = await _eContractRepository.GetEContractsByHierarchyAsync(request.EmplChild, strEmplChild, dateFrom, dateTo, userCode);
+            //    result = await _eContractRepository.GetEContractsByHierarchyAsync(request.EmplChild, strEmplChild, dateFrom, dateTo, userCode);
+            //}
+            //else
+            if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
+            {
+                decodedOID = Uri.UnescapeDataString(request.OIDSearch);
             }
-            else if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
-            {
-                var decodedOID = Uri.UnescapeDataString(request.OIDSearch);
-
-                var (data, _) = await _eContractRepository.GetPagedAsync(
-                    crtUser: "%",
-                    frm: "2010-01-01",
+            var (data, _) = await _eContractRepository.GetPagedAsync(
+                    crtUser: userCode,
+                    frm: dateFrom,
                     end: dateTo,
                     search: decodedOID,
                     statusFilter: null,
                     page: 1,
                     pageSize: 999
                 );
+            result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
 
-                result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
-            }
-            else if (!string.IsNullOrEmpty(request.CusTName))
-            {
-                result = await _eContractRepository.Search(request.CusTName, crtUser, "2010-01-01", dateTo);
-            }
-            else
-            {
-                result = await _eContractRepository.GetAllList(crtUser, dateFrom, dateTo);
-            }
+            //else if (!string.IsNullOrEmpty(request.CusTName))
+            //{
+            //    result = await _eContractRepository.Search(request.CusTName, crtUser, "2010-01-01", dateTo);
+            //}
+            //else
+            //{
+            //    result = await _eContractRepository.GetAllList(crtUser, dateFrom, dateTo);
+            //}
 
             if (result?.lstMonitor == null) return new EContractServiceResult { Total = 0, Data = new List<EContract_Monitor>() };
 
