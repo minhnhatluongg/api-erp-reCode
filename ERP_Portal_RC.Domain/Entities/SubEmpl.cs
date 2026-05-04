@@ -2,6 +2,7 @@
 {
     public class SubEmpl
     {
+        public string? ParentEmployeeID { get; set; }
         public string? EmployeeID { get; set; }
         public string? hoten_V { get; set; }
         public string? dutyname { get; set; }

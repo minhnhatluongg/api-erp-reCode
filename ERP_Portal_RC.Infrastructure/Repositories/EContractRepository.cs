@@ -768,17 +768,18 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     new { model.OID }, trans);
 
                 // 4. Xóa thông tin tại zsgn_EContractJobs dựa trên Variant19 (Theo yêu cầu where thẳng theo Variant19)
-                int delZsgnJobs = await con.ExecuteAsync(
-                    "DELETE FROM BosApproval.dbo.zsgn_EContractJobs WHERE Variant19 = @Variant19",
-                    new { Variant19 = variant19 }, trans);
+                //int delZsgnJobs = await con.ExecuteAsync(
+                //    "DELETE FROM BosApproval.dbo.zsgn_EContractJobs WHERE Variant19 = @Variant19",
+                //    new { Variant19 = variant19 }, trans);
 
                 // 5. Xóa thông tin Public (Hợp đồng đã ký)
                 int delPublic = await con.ExecuteAsync(
                     "DELETE FROM BosControlEVAT.dbo.ECtr_PublicInfo WHERE InvcCode = @OID",
                     new { model.OID }, trans);
 
-                string status = (delZsgnWeb > 0 || delZsgnJobs > 0 || delPublic > 0) ? "DELETED" : "NO_ACTION";
-                string msg = $"Kết quả: {delZsgnWeb} dòng web, {delZsgnJobs} dòng jobs (Variant19: {variant19}), {delPublic} dòng Public đã xử lý.";
+                //string status = (delZsgnWeb > 0 || delZsgnJobs > 0 || delPublic > 0) ? "DELETED" : "NO_ACTION";
+                string status = (delZsgnWeb > 0 || delPublic > 0) ? "DELETED" : "NO_ACTION";
+                string msg = $"Kết quả: {delZsgnWeb} dòng web, {delPublic} dòng Public đã xử lý.";
 
                 // 6. Ghi Log Unsign
                 await con.ExecuteAsync(@"
@@ -798,7 +799,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     }, trans);
 
                 trans.Commit();
-                return (true, msg, new { delZsgnWeb, delZsgnJobs, delPublic, status });
+                return (true, msg, new { delZsgnWeb, delPublic, status });
             }
             catch (Exception)
             {
@@ -1896,6 +1897,41 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
             using var multi = await conn.QueryMultipleAsync(
                 "wspList_EContracts_PagedV26",
+                parameters,
+                commandType: CommandType.StoredProcedure,
+                commandTimeout: 120);
+
+            var data = (await multi.ReadAsync<EContract_Monitor>()).ToList();
+
+            var subEmpl = !multi.IsConsumed
+                ? (await multi.ReadAsync<SubEmpl>()).ToList()
+                : new List<SubEmpl>();
+
+            return (data, subEmpl);
+        }
+        public async Task<(IEnumerable<EContract_Monitor> Data, IEnumerable<SubEmpl> SubEmpl)> GetPagedAsync_FilterBySale(string crtUser, string frm, string end, string? search, string? filterBySale, int? statusFilter, int page, int pageSize)
+        {
+            // Normalize tên công ty (giữ logic cũ)
+            search = search switch
+            {
+                "CÔNG TY TNHH WIN TECH SOLUTION" => "WIN TECH",
+                "CÔNG TY TNHH WIN ONLINE MEDIA" => "WIN ONLINE",
+                _ => search
+            };
+
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            var parameters = new DynamicParameters();
+            parameters.Add("@CrtUser", crtUser);
+            parameters.Add("@Frm_date", frm);
+            parameters.Add("@End_date", end);
+            parameters.Add("@strSearch", search ?? "");
+            parameters.Add("@SaleFilter", filterBySale ?? "");
+            parameters.Add("@StatusFilter", statusFilter);
+            parameters.Add("@Page", page);
+            parameters.Add("@PageSize", pageSize);
+
+            using var multi = await conn.QueryMultipleAsync(
+                "wspList_EContracts_PagedV26ASM",
                 parameters,
                 commandType: CommandType.StoredProcedure,
                 commandTimeout: 120);

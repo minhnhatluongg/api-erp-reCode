@@ -1,5 +1,4 @@
-﻿using Dapper;
-using ERP_Portal_RC.Application.DTOs;
+﻿using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Common;
@@ -802,10 +801,39 @@ namespace API.ERP_Portal_RC.Controllers
         {
             var userCode = User.FindFirstValue("UserCode") ?? "";
             var userName = User.FindFirstValue("UserName") ?? "";
-            var grpList = User.FindFirstValue("GrpList") ?? "";
+            var grpList  = User.FindFirstValue("GrpList")  ?? "";
 
             var result = await _econtractService.GetPagedAsync(userCode, userName, grpList, request);
             return Ok(result);
+        }
+
+        /// <summary>
+        /// Lấy danh sách hợp đồng theo bộ lọc OIDSearch (MST,OID,CustName) và EmplChild, trả kèm meta về nội dung đơn hàng và cây ASM (Aply Sale Manager).
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        [HttpGet("listContract_v26")]
+        public async Task<IActionResult> listContract_v26([FromQuery] EContractFilterRequest request)
+        {
+            try
+            {
+                var loginName = User.FindFirst(ClaimTypes.Name)?.Value;
+                var userCode = User.FindFirst("UserCode")?.Value;
+                var groupList = User.FindFirst("Grp_List")?.Value ?? "";
+
+                if (string.IsNullOrEmpty(userCode))
+                {
+                    return Unauthorized(ApiResponse.ErrorResponse("Không tìm thấy mã người dùng trong Token.", 401));
+                }
+
+                var result = await _econtractService.listContractAsync_v26(loginName, request, groupList, userCode);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 400));
+            }
         }
     }
 }

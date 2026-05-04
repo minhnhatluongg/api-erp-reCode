@@ -23,20 +23,22 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             string? search,
             int? statusFilter,
             string? filterSaleEmID,
+            bool viewAll,
             int page,
             int pageSize)
         {
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
 
             var param = new DynamicParameters();
-            param.Add("@CrtUser",        crtUser,       DbType.String);
-            param.Add("@Frm_date",       frmDate,       DbType.String);
-            param.Add("@End_date",       endDate,       DbType.String);
-            param.Add("@strSearch",      search ?? "",  DbType.String);
-            param.Add("@StatusFilter",   statusFilter,  DbType.Int32);
-            param.Add("@FilterSaleEmID", filterSaleEmID,DbType.String);
-            param.Add("@Page",           page,          DbType.Int32);
-            param.Add("@PageSize",       pageSize,      DbType.Int32);
+            param.Add("@CrtUser",        crtUser,        DbType.String);
+            param.Add("@Frm_date",       frmDate,        DbType.String);
+            param.Add("@End_date",       endDate,        DbType.String);
+            param.Add("@strSearch",      search ?? "",   DbType.String);
+            param.Add("@StatusFilter",   statusFilter,   DbType.Int32);
+            param.Add("@FilterSaleEmID", filterSaleEmID, DbType.String);
+            param.Add("@ViewAll",        viewAll ? 1 : 0,DbType.Byte);
+            param.Add("@Page",           page,           DbType.Int32);
+            param.Add("@PageSize",       pageSize,       DbType.Int32);
 
             using var multi = await conn.QueryMultipleAsync(
                 "wspList_EContracts_PagedV27",

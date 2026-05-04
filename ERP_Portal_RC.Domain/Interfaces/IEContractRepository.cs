@@ -108,5 +108,15 @@ namespace ERP_Portal_RC.Domain.Interfaces
         int? statusFilter,
         int page,
         int pageSize);
+
+        Task<(IEnumerable<EContract_Monitor> Data, IEnumerable<SubEmpl> SubEmpl)> GetPagedAsync_FilterBySale(
+        string crtUser,
+        string frm,
+        string end,
+        string? search,
+        string? SaleFilter,
+        int? statusFilter,
+        int page,
+        int pageSize);
     }
 }
