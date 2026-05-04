@@ -34,6 +34,21 @@ namespace ERP_Portal_RC.Application.DTOs
         /// </summary>
         public string? FilterSaleEmID { get; set; }
 
+        /// <summary>
+        /// Usercode gốc để load cây ASM (dành cho kế toán / quản lý).
+        /// Null / trống = tự lấy từ JWT token.
+        /// Truyền vào (VD: "012001") = dùng usercode đó làm CrtUser.
+        /// </summary>
+        public string? CrtUser { get; set; }
+
+        /// <summary>
+        /// Chế độ kế toán / quản lý: xem tất cả hợp đồng, không lọc theo team ASM.
+        /// false (mặc định) = lọc theo team của CrtUser.
+        /// true             = bỏ qua filter team, lấy toàn bộ HĐ trong khoảng ngày.
+        ///                    FilterSaleEmID vẫn hoạt động bình thường.
+        /// </summary>
+        public bool ViewAll { get; set; } = false;
+
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 20;
     }

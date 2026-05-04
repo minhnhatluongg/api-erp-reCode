@@ -31,6 +31,7 @@ namespace ERP_Portal_RC.Application.Interfaces
             ContractSearchRequest request);
         //Get all EContracts with filters
         Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string userCode, string groupList);
+        Task<EContractPagedResponsePage> listContractAsync_v26(string userName, EContractFilterRequest request, string userCode, string groupList);
 
         //Trình kí / Yêu cầu phát hành mẫu / Phát Hành Mẫu
         Task<(bool success, bool emailSent)> ProposeSignContractAsync(ApprovalWorkflowRequest model, string userId, string saleFullName);
@@ -84,5 +85,12 @@ namespace ERP_Portal_RC.Application.Interfaces
         string userName,
         string grpList,
         EContractPagedRequest request);
-    } 
+
+        Task<EContractPagedResponsePage> GetPagedAsync_FilterBySale(
+        string userCode,
+        string userName,
+        string grpList,
+        EContractPagedRequest request,
+        string? saleFilter);
+    }
 }

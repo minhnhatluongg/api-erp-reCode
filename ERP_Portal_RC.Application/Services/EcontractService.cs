@@ -67,49 +67,58 @@ namespace ERP_Portal_RC.Application.Services
             var dateFrom = !string.IsNullOrEmpty(request.FrmDate) ? request.FrmDate : "2010-01-01";
             var dateTo = !string.IsNullOrEmpty(request.ToDate) ? request.ToDate : DateTime.Now.AddDays(1).ToString("yyyy-MM-dd");
 
-            string crtUser = (resultMenu?.mode == 1 || request.IsUser == "1") ? userCode : "%";
+            string crtUser = userCode;// (resultMenu?.mode == 1 || request.IsUser == "1") ? userCode : "%";
             var decodedOID = "";
 
             ListEcontractViewModel result;
-            //if (!string.IsNullOrEmpty(request.EmplChild) && request.EmplChild != "null")
-            //{
-            //    string strEmplChild = (string.IsNullOrEmpty(request.StrEmplChild) || request.StrEmplChild == "null")
-            //        ? userCode : request.StrEmplChild;
 
-            //    result = await _eContractRepository.GetEContractsByHierarchyAsync(request.EmplChild, strEmplChild, dateFrom, dateTo, userCode);
-            //}
-            //else
             if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
             {
                 decodedOID = Uri.UnescapeDataString(request.OIDSearch);
             }
+
+            //string decodedSaleFilter = (string.IsNullOrEmpty(request.EmplChild) || request.EmplChild == "null") ? userCode : request.EmplChild;
+
             var (data, _) = await _eContractRepository.GetPagedAsync(
                     crtUser: userCode,
                     frm: dateFrom,
                     end: dateTo,
                     search: decodedOID,
+                    //SaleFilter: decodedSaleFilter,
                     statusFilter: null,
                     page: 1,
                     pageSize: 999
                 );
             result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
 
-            //else if (!string.IsNullOrEmpty(request.CusTName))
-            //{
-            //    result = await _eContractRepository.Search(request.CusTName, crtUser, "2010-01-01", dateTo);
-            //}
-            //else
-            //{
-            //    result = await _eContractRepository.GetAllList(crtUser, dateFrom, dateTo);
-            //}
 
-            if (result?.lstMonitor == null) return new EContractServiceResult { Total = 0, Data = new List<EContract_Monitor>() };
+            //    if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
+            //    {
+            //        decodedOID = Uri.UnescapeDataString(request.OIDSearch);
+            //    }
+            //    var (data, _) = await _eContractRepository.GetPagedAsync(
+            //            crtUser: userCode,
+            //            frm: dateFrom,
+            //            end: dateTo,
+            //            search: decodedOID,
+            //            statusFilter: null,
+            //            page: 1,
+            //            pageSize: 999
+            //        );
+            //    result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
+
+
+            if (result?.lstMonitor == null) return new EContractServiceResult
+            {
+                Total = 0,
+                Data = new List<EContract_Monitor>()
+            };
 
             var filteredQuery = result.lstMonitor.AsEnumerable();
-            if (!string.IsNullOrWhiteSpace(request.Status) && int.TryParse(request.Status, out int statusInt))
-            {
-                filteredQuery = filteredQuery.Where(x => x.CurrSignNumb == statusInt);
-            }
+            //if (!string.IsNullOrWhiteSpace(request.Status) && int.TryParse(request.Status, out int statusInt))
+            //{
+            //    filteredQuery = filteredQuery.Where(x => x.CurrSignNumb == statusInt);
+            //}
 
             // 5. Phân trang (Pagination)
             int totalRecords = filteredQuery.Count();
@@ -143,10 +152,19 @@ namespace ERP_Portal_RC.Application.Services
                 }
             }
 
+            //return new EContractServiceResult
+            //{
+            //    MoneyToBePaid = (CN != null && CN.PTHU != 0.000m) ? FormatCurrency(CN.PTHU) : "0",
+            //    MoneyPaid = (CN != null && CN.DABTT != 0.000m) ? FormatCurrency(CN.DABTT) : "0",
+            //    Data = pagedList,
+            //    Total = totalRecords,
+            //    Disable = result.IsDisiable
+            //};
+
             return new EContractServiceResult
             {
-                MoneyToBePaid = (CN != null && CN.PTHU != 0.000m) ? FormatCurrency(CN.PTHU) : "0",
-                MoneyPaid = (CN != null && CN.DABTT != 0.000m) ? FormatCurrency(CN.DABTT) : "0",
+                MoneyToBePaid = "0",
+                MoneyPaid = "0",
                 Data = pagedList,
                 Total = totalRecords,
                 Disable = result.IsDisiable
@@ -667,6 +685,50 @@ namespace ERP_Portal_RC.Application.Services
                 return ApiResponse<object>.SuccessResponse(null, message);
 
             return ApiResponse<object>.ErrorResponse(message);
+        }
+
+        public async Task<EContractPagedResponsePage> GetPagedAsync_FilterBySale(
+            string userCode, string userName, string grpList,
+            EContractPagedRequest request, string? saleFilter)
+        {
+            var menuInfo = await _eContractRepository.GetDSMenuByID(userName, grpList);
+            string crtUser = (menuInfo.mode == 1) ? userCode : UserMaster.UserCode;
+
+            string frm = request.FrmDate
+                ?? DateTime.Now.AddDays(-7).ToString("yyyy-MM-dd");
+            string end = request.ToDate
+                ?? DateTime.Now.AddDays(1).ToString("yyyy-MM-dd HH:mm:ss");
+
+            int page     = Math.Max(1, request.Page);
+            int pageSize = request.PageSize is > 0 and <= 100 ? request.PageSize : 20;
+
+            string? searchKeyword = string.IsNullOrWhiteSpace(request.SearchKeyword)
+                ? null
+                : request.SearchKeyword.Trim();
+
+            // "me" → map sang userCode đang login
+            string? resolvedSaleFilter = saleFilter?.Trim() switch
+            {
+                null or "" => null,
+                "me"       => userCode,
+                var v      => v
+            };
+
+            int? statusFilter = int.TryParse(request.Status, out int s) ? s : null;
+
+            var (data, subEmpl) = await _eContractRepository.GetPagedAsync_FilterBySale(
+                crtUser, frm, end, searchKeyword, resolvedSaleFilter, statusFilter, page, pageSize);
+
+            var dataList = data.ToList();
+
+            return new EContractPagedResponsePage
+            {
+                Data       = dataList,
+                SubEmpl    = subEmpl.ToList(),
+                TotalCount = dataList.FirstOrDefault()?.TotalCount ?? 0,
+                Page       = page,
+                PageSize   = pageSize
+            };
         }
 
         public async Task<ApiResponse<object>> UnSignAsync(UnSignRequest model)
@@ -1704,7 +1766,98 @@ namespace ERP_Portal_RC.Application.Services
             };
         }
 
-       
+        public async Task<EContractPagedResponsePage> listContractAsync_v26(string userName, EContractFilterRequest request, string groupList, string userCode)
+        {
+            var menuTask = _eContractRepository.GetDSMenuByID(userName, groupList);
+            var moneyTask = _eContractRepository.CheckBCTT("26", userCode, "0000003");
+
+            await Task.WhenAll(menuTask, moneyTask);
+
+            var CN = await moneyTask;
+            var resultMenu = await menuTask;
+
+            var dateFrom = !string.IsNullOrEmpty(request.FrmDate) ? request.FrmDate : "2010-01-01";
+            var dateTo = !string.IsNullOrEmpty(request.ToDate) ? request.ToDate : DateTime.Now.AddDays(1).ToString("yyyy-MM-dd");
+
+            string crtUser = userCode;// (resultMenu?.mode == 1 || request.IsUser == "1") ? userCode : "%";
+            var decodedOID = "";
+
+            ListEcontractViewModel result;
+
+            if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
+            {
+                decodedOID = Uri.UnescapeDataString(request.OIDSearch);
+            }
+
+            string decodedSaleFilter = (string.IsNullOrEmpty(request.EmplChild) || request.EmplChild == "null") ? userCode : request.EmplChild;
+
+            var (data, subEmpl) = await _eContractRepository.GetPagedAsync_FilterBySale(
+                    crtUser: userCode,
+                    frm: dateFrom,
+                    end: dateTo,
+                    search: decodedOID,
+                    SaleFilter: decodedSaleFilter,
+                    statusFilter: null,
+                    page: 1,
+                    pageSize: 999
+                );
+            result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
+
+
+            if (result?.lstMonitor == null) return new EContractPagedResponsePage
+            {
+                TotalCount = 0,
+                Page = 0,
+                PageSize = 0
+            };
+
+            var filteredQuery = result.lstMonitor.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(request.Status) && int.TryParse(request.Status, out int statusInt))
+            {
+                filteredQuery = filteredQuery.Where(x => x.CurrSignNumb == statusInt);
+            }
+
+            // 5. Phân trang (Pagination)
+            int totalRecords = filteredQuery.Count();
+            int pageSize = request.PageSize;
+            int page = request.Page;
+            int offset = (page - 1) * pageSize;
+
+            var pagedList = (pageSize == -1)
+                ? filteredQuery.ToList()
+                : filteredQuery.Skip(offset).Take(pageSize).ToList();
+
+            if (pagedList.Any())
+            {
+                var currentPageOids = pagedList.Select(x => x.OID).ToList();
+                var oidsWithDetails = await _eContractRepository.GetListOIDHasDetails(currentPageOids);
+                var oidsWithDetailsSet = new HashSet<string>(oidsWithDetails ?? new List<string>());
+
+                foreach (var item in pagedList)
+                {
+                    // Đảm bảo ngày tháng hợp lệ
+                    if (item.ODATE == DateTime.MinValue) item.ODATE = DateTime.Now;
+
+                    // Quyền Disable dựa trên người tạo
+                    item.IsDisiable = (item.Crt_User != userCode);
+
+                    // Mapping trạng thái TT2 từ kế toán (TT6) nếu có
+                    if (item.currSignNumbJobKT != 0) item.TT2 = item.TT6;
+
+                    // Kiểm tra xem có chi tiết đính kèm không
+                    item.isCheckedShow = oidsWithDetailsSet.Contains(item.OID);
+                }
+            }
+
+            return new EContractPagedResponsePage
+            {
+                Data = result.lstMonitor,
+                SubEmpl = subEmpl.ToList(),
+                TotalCount = totalRecords,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
     }
 }
 
