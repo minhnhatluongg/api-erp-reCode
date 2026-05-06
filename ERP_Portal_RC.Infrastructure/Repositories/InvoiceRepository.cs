@@ -14,6 +14,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
     public class InvoiceRepository : IInvoiceRepository
     {
         private readonly HttpClient _httpClient;
+        private readonly ILogger<InvoiceRepository> _logger;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -21,9 +22,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             WriteIndented = false
         };
 
-        public InvoiceRepository(IHttpClientFactory httpClientFactory)
+        public InvoiceRepository(IHttpClientFactory httpClientFactory, ILogger<InvoiceRepository> logger)
         {
             _httpClient = httpClientFactory.CreateClient("WinInvoiceClient");
+            _logger = logger;
         }
 
         public async Task<WinInvoiceCreateResponse> CreateInvoiceAsync(
@@ -37,6 +39,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
             var rawJson = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
 
+            _logger.LogInformation("Raw Response from WinInvoice: {RawJson}", rawJson);
+
             if (!httpResponse.IsSuccessStatusCode)
             {
                 return new WinInvoiceCreateResponse
@@ -46,13 +50,48 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 };
             }
 
-            var result = JsonSerializer.Deserialize<WinInvoiceCreateResponse>(rawJson, _jsonOptions);
-
-            return result ?? new WinInvoiceCreateResponse
+            try
             {
-                IsSuccess = false,
-                ErrorMessage = "Không deserialize được response từ WinInvoice."
-            };
+                var result = JsonSerializer.Deserialize<WinInvoiceCreateResponse>(rawJson, _jsonOptions);
+                return result ?? new WinInvoiceCreateResponse
+                {
+                    IsSuccess = false,
+                    ErrorMessage = "Không deserialize được response từ WinInvoice."
+                };
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Lỗi Deserialize JSON từ WinInvoice. Raw: {RawJson}", rawJson);
+
+                string? winInvoiceMessage = null;
+                bool winInvoiceSuccess = false;
+                string? winInvoiceErrorCode = null;
+                string? winInvoiceInvRef = null;
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(rawJson);
+                    var root = doc.RootElement;
+
+                    winInvoiceSuccess    = root.TryGetProperty("isSuccess",    out var s) && s.GetBoolean();
+                    winInvoiceMessage    = root.TryGetProperty("errorMessage", out var m) ? m.GetString() : null;
+                    winInvoiceErrorCode  = root.TryGetProperty("ErrorCode",    out var c) ? c.ToString() : null;
+                    winInvoiceInvRef     = root.TryGetProperty("invRef",       out var r) ? r.GetString() : null;
+                }
+                catch
+                {
+                    // Raw JSON cũng không parse được — trả nguyên raw
+                }
+
+                return new WinInvoiceCreateResponse
+                {
+                    IsSuccess    = winInvoiceSuccess,
+                    ErrorMessage = winInvoiceMessage
+                        ?? $"WinInvoice trả về dữ liệu không đọc được. Raw: {rawJson[..Math.Min(200, rawJson.Length)]}",
+                    ErrorCode    = winInvoiceErrorCode,
+                    InvRef       = winInvoiceInvRef
+                };
+            }
         }
     }
 }

@@ -101,9 +101,12 @@ namespace ERP_Portal_RC.Application.Services
         public async Task<RegistrationResultDto> HandleSaleRegistrationAsync(SaleRegistrationModel request)
         {
             if (string.IsNullOrEmpty(request.FullName) || string.IsNullOrEmpty(request.Email))
-            {
-                throw new ArgumentException("FullName, Email are required fields.");
-            }
+                throw new ArgumentException("FullName, Email là bắt buộc.");
+
+            // ManagerEmplID bắt buộc — thiếu thì HmrWorkingProcess không insert được
+            // → nhân viên không có cây ASM → không thấy hợp đồng nào
+            if (string.IsNullOrWhiteSpace(request.ManagerEmplID))
+                throw new ArgumentException("ManagerEmplID (mã quản lý trực tiếp) là bắt buộc. Không thể đăng ký nhân sự khi chưa chỉ định quản lý.");
             //var isValid = await _registrationCodeService.ValidateCodeAsync(request.RegistrationCode);
             //if (!isValid)
             //{
@@ -115,18 +118,32 @@ namespace ERP_Portal_RC.Application.Services
                 if (request.LoginName?.Length < 5) throw new Exception("Tên đăng nhập phải từ 5 ký tự.");
                 if (request.Password?.Length < 6) throw new Exception("Mật khẩu phải từ 6 ký tự.");
 
-                int isExisted = await _customStore.ChkUser(request.LoginName!);
-                if (isExisted > 0) throw new Exception("Tên đăng nhập này đã tồn tại.");
+                // ── Check LoginName, tự sinh hậu tố nếu trùng ──────────────
+                string baseLoginName = request.LoginName!;
+                int suffix = 1;
+                while (await _customStore.ChkUser(request.LoginName!) > 0)
+                {
+                    if (suffix > 10)
+                        throw new Exception($"Không thể sinh tên đăng nhập cho '{baseLoginName}'. Vui lòng chọn tên khác.");
+                    request.LoginName = $"{baseLoginName}_{suffix++}";
+                }
+
+                // ── Check Email: bosInsertUserOnApp có thể match theo email
+                //    → nếu email đã tồn tại, SP trả về UserCode cũ thay vì tạo mới
+                int emailExists = await _customStore.ChkUserByEmail(request.Email!);
+                if (emailExists > 0)
+                    throw new Exception($"Email '{request.Email}' đã được đăng ký trong hệ thống. Vui lòng dùng email khác.");
             }
 
             string newEmplId = await _salesHierarchyRepository.RegisterSaleHierarchyAsync(request, "000642");
 
             string? newUserCode = null;
 
-
             // Tạo tk ERP nếu tick sử dụng
             if (request.IsCreateAccount)
             {
+                // CreateERPAccountOnlyAsync tự check bosUser trước khi gọi SP
+                // → luôn trả về emplId (dù SP có match sai cũng không ảnh hưởng)
                 newUserCode = await _salesHierarchyRepository.CreateERPAccountOnlyAsync(
                     request.LoginName!,
                     request.Password!,
@@ -134,7 +151,8 @@ namespace ERP_Portal_RC.Application.Services
                     request.Email!,
                     newEmplId);
 
-                await _customStore.AddUserToGroup(newUserCode);
+                // Thêm vào group theo emplId
+                await _customStore.AddUserToGroup(newEmplId);
             }
 
             // Gọi API tạo TK trên hệ thống bên ngoài
@@ -164,9 +182,9 @@ namespace ERP_Portal_RC.Application.Services
 
             return new RegistrationResultDto
             {
-                NewEmployeeID = newEmplId,
-                NewUserCode = newUserCode,
-                //CodeLogin = request.LoginName,
+                NewEmployeeID      = newEmplId,
+                NewUserCode        = newUserCode,
+                LoginNameUsed      = request.IsCreateAccount ? request.LoginName : null,
                 ExternalApiWarning = externalWarning,
             };
         }

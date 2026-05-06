@@ -12,6 +12,8 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<IEnumerable<int>> CheckUserByLoginNameAsync(string loginName);
         /// Check user tồn tại (sync version)
         Task<int> ChkUser(string loginName);
+        /// Check user tồn tại theo Email — dùng khi bosInsertUserOnApp có thể match theo email
+        Task<int> ChkUserByEmail(string email);
         /// Lấy menu theo group
         Task<IEnumerable<web_bosMenu_ByGroup>> GetApplicationToolsByGroupAsync(string groupList);
         /// Tạo user mới

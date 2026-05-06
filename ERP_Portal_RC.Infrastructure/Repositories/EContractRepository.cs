@@ -601,6 +601,129 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return master.OID;
         }
 
+        public async Task<string> UpdateFullContractAsync(EContractMaster master, List<EContractDetails>? details)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+
+            // Build details table (empty table nếu không có details → SP giữ nguyên)
+            var detailsTable = new DataTable();
+            detailsTable.Columns.Add("ItemNo",       typeof(int));
+            detailsTable.Columns.Add("OID",          typeof(string));
+            detailsTable.Columns.Add("ItemID",       typeof(string));
+            detailsTable.Columns.Add("ItemName",     typeof(string));
+            detailsTable.Columns.Add("ItemUnit",     typeof(string));
+            detailsTable.Columns.Add("ItemPrice",    typeof(decimal));
+            detailsTable.Columns.Add("ItemQtty",     typeof(decimal));
+            detailsTable.Columns.Add("ItemAmnt",     typeof(decimal));
+            detailsTable.Columns.Add("VAT_Rate",     typeof(decimal));
+            detailsTable.Columns.Add("VAT_Amnt",     typeof(decimal));
+            detailsTable.Columns.Add("Sum_Amnt",     typeof(decimal));
+            detailsTable.Columns.Add("Descrip",      typeof(string));
+            detailsTable.Columns.Add("InvcSign",     typeof(string));
+            detailsTable.Columns.Add("InvcFrm",      typeof(int));
+            detailsTable.Columns.Add("InvcEnd",      typeof(int));
+            detailsTable.Columns.Add("invcSample",   typeof(string));
+            detailsTable.Columns.Add("itemUnitName", typeof(string));
+            detailsTable.Columns.Add("ItemPerBox",   typeof(decimal));
+
+            if (details != null && details.Count > 0)
+            {
+                int count = 1;
+                foreach (var d in details)
+                {
+                    decimal amnt    = d.ItemQtty * d.ItemPrice;
+                    decimal vatAmnt = amnt * (d.VAT_Rate / 100);
+                    detailsTable.Rows.Add(
+                        count++,
+                        master.OID,
+                        d.ItemID      ?? "",
+                        d.ItemName    ?? "",
+                        d.ItemUnit    ?? "",
+                        d.ItemPrice,
+                        d.ItemQtty,
+                        amnt,
+                        d.VAT_Rate,
+                        vatAmnt,
+                        amnt + vatAmnt,
+                        d.ItemName    ?? "",
+                        d.InvcSign    ?? "",
+                        d.InvcFrm,
+                        d.InvcEnd,
+                        d.InvcSample  ?? "",
+                        d.itemUnitName ?? d.ItemUnit ?? "",
+                        d.ItemPerBox
+                    );
+                }
+            }
+
+            var p = new DynamicParameters();
+            // BẮT BUỘC
+            p.Add("@OID",                master.OID);
+            p.Add("@ChgeUser",           master.ChgeUser ?? master.Crt_User);
+            // Công ty — null = giữ nguyên giá trị cũ trong DB
+            p.Add("@CmpnName",           master.CmpnName);
+            p.Add("@CmpnAddress",        master.CmpnAddress);
+            p.Add("@CmpnContactAddress", master.CmpnContactAddress);
+            p.Add("@CmpnTax",            master.CmpnTax);
+            p.Add("@CmpnTel",            master.CmpnTel);
+            p.Add("@CmpnMail",           master.CmpnMail);
+            p.Add("@CmpnPeople_Sign",    master.CmpnPeople_Sign);
+            p.Add("@CmpnPosition_BySign",master.CmpnPosition_BySign);
+            p.Add("@CmpnBankNumber",     master.CmpnBankNumber);
+            p.Add("@CmpnBankAddress",    master.CmpnBankAddress);
+            // Khách hàng
+            p.Add("@CusName",            master.CusName);
+            p.Add("@CusAddress",         master.CusAddress);
+            p.Add("@CusContactAddress",  master.CusContactAddress);
+            p.Add("@CusTax",             master.CusTax);
+            p.Add("@CusTel",             master.CusTel);
+            p.Add("@CusFax",             master.CusFax);
+            p.Add("@CusEmail",           master.CusEmail);
+            p.Add("@CusPeople_Sign",     master.CusPeople_Sign);
+            p.Add("@CusPosition_BySign", master.CusPosition_BySign);
+            p.Add("@CusBankNumber",      master.CusBankNumber);
+            p.Add("@CusBankAddress",     master.CusBankAddress);
+            p.Add("@CusWebsite",         master.CusWebsite);
+            p.Add("@RegionID",           master.RegionID);
+            // Tiền tệ
+            p.Add("@PrdcAmnt",           master.PrdcAmnt == 0 ? (decimal?)null : master.PrdcAmnt);
+            p.Add("@VAT_Rate",           master.VAT_Rate  == 0 ? (decimal?)null : master.VAT_Rate);
+            p.Add("@VAT_Amnt",           master.VAT_Amnt  == 0 ? (decimal?)null : master.VAT_Amnt);
+            p.Add("@DscnAmnt",           master.DscnAmnt  == 0 ? (decimal?)null : master.DscnAmnt);
+            p.Add("@Sum_Amnt",           master.Sum_Amnt  == 0 ? (decimal?)null : master.Sum_Amnt);
+            // Nội dung
+            p.Add("@SampleID",           master.SampleID);
+            p.Add("@HTMLContent",        master.HTMLContent);
+            p.Add("@Descrip",            master.Descrip);
+            p.Add("@Descript_Cus",       master.Descript_Cus);
+            p.Add("@TaxDepartment",      master.TaxDepartment);
+            p.Add("@CmpID_Sign",         master.CmpID_Sign);
+            p.Add("@CmpName_Sign",       master.CmpName_Sign);
+            p.Add("@OIDContract",        master.OIDContract);
+            p.Add("@tokenOID",           master.tokenOID);
+            // Ngày
+            p.Add("@ODate",              master.ODate == default ? (DateTime?)null : master.ODate);
+            p.Add("@RefeContractDate",   string.IsNullOrEmpty(master.RefeContractDate) ? (DateTime?)null
+                                             : DateTime.Parse(master.RefeContractDate));
+            p.Add("@Date_BusLicence",    string.IsNullOrEmpty(master.Date_BusLicence) ? (DateTime?)null
+                                             : DateTime.Parse(master.Date_BusLicence));
+            // Flags — chỉ truyền khi != null
+            p.Add("@IsCapBu",            string.IsNullOrEmpty(master.IsCapBu)  ? (bool?)null : master.IsCapBu  == "1");
+            p.Add("@IsGiaHan",           string.IsNullOrEmpty(master.IsGiaHan) ? (bool?)null : master.IsGiaHan == "1");
+            p.Add("@IsOnline",           (bool?)master.IsOnline);
+            p.Add("@isTT78",             (bool?)master.IsTT78);
+            // Details
+            p.Add("@Details",            detailsTable.AsTableValuedParameter("dbo.EContractDetailType"));
+
+            await conn.ExecuteAsync(
+                "dbo.sp_EContract_UpdateAll",
+                p,
+                commandType: CommandType.StoredProcedure,
+                commandTimeout: 60);
+
+            return master.OID;
+        }
+
         public async Task CreateApprovalFlowAsync(EContractMaster master)
         {
             using var conn = _dbConnectionFactory.GetConnection("BosApproval");
@@ -800,6 +923,91 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
                 trans.Commit();
                 return (true, msg, new { delZsgnWeb, delPublic, status });
+            }
+            catch (Exception)
+            {
+                trans.Rollback();
+                throw;
+            }
+        }
+
+        public async Task<(bool Success, string Message, object Data)> RutTrinhKyAsync(
+            UnSignRequest model, string correlationId)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            if (con.State == ConnectionState.Closed)
+                await ((System.Data.Common.DbConnection)con).OpenAsync();
+
+            if (string.IsNullOrWhiteSpace(model.OID))
+                return (false, "OID không được để trống.", null);
+
+            string oid = model.OID.Trim();
+
+            using var trans = con.BeginTransaction();
+            try
+            {
+                // ── 1. GUARD: kiểm tra hợp đồng đã được duyệt bước cao hơn chưa ───
+                // Nếu đã có SignNumb 301 hoặc 501 → không cho rút
+                const string checkAdvancedSql = @"
+                    SELECT COUNT(1)
+                    FROM BosApproval.dbo.zsgn_webContracts WITH (NOLOCK)
+                    WHERE OID = @OID
+                      AND FactorID = 'EContract'
+                      AND SignNumb IN (301, 501)";
+
+                int advancedCount = await con.ExecuteScalarAsync<int>(
+                    checkAdvancedSql, new { OID = oid }, trans);
+
+                if (advancedCount > 0)
+                    return (false,
+                        "Hợp đồng đã được phê duyệt (SignNumb 301/501). Không thể rút trình ký.",
+                        new { status = "BLOCKED_ALREADY_APPROVED" });
+
+                // ── 2. GUARD: phải đang ở trạng thái trình ký (101) ─────────────
+                const string checkSubmittedSql = @"
+                    SELECT COUNT(1)
+                    FROM BosApproval.dbo.zsgn_webContracts WITH (NOLOCK)
+                    WHERE OID = @OID
+                      AND FactorID = 'EContract'
+                      AND SignNumb = 101";
+
+                int submittedCount = await con.ExecuteScalarAsync<int>(
+                    checkSubmittedSql, new { OID = oid }, trans);
+
+                if (submittedCount == 0)
+                    return (false,
+                        "Hợp đồng không ở trạng thái đang trình ký (SignNumb = 101). Không có gì để rút.",
+                        new { status = "NOT_SUBMITTED" });
+
+                // ── 3. THỰC HIỆN RÚT TRÌNH KÝ ────────────────────────────────────
+                // Xóa toàn bộ bản ghi zsgn_webContracts → hợp đồng về trạng thái chưa trình ký
+                int deleted = await con.ExecuteAsync(
+                    "DELETE FROM BosApproval.dbo.zsgn_webContracts WHERE OID = @OID AND FactorID = 'EContract'",
+                    new { OID = oid }, trans);
+
+                string status = deleted > 0 ? "WITHDRAWN" : "NO_ACTION";
+                string msg    = $"Rút trình ký thành công. Đã xóa {deleted} bản ghi khỏi hàng đợi duyệt.";
+
+                // ── 4. GHI LOG ────────────────────────────────────────────────────
+                await con.ExecuteAsync(@"
+                    INSERT INTO BosControlEVAT.dbo.ECtr_UnsignLogs
+                        (OID, CorrelationId, Reason, RequestedBy, FullName, [Role], ActionStatus, ActionMessage)
+                    VALUES
+                        (@OID, @CorrelationId, @Reason, @RequestedBy, @FullName, @Role, @Status, @Msg)",
+                    new
+                    {
+                        OID          = oid,
+                        CorrelationId = correlationId,
+                        model.Reason,
+                        model.RequestedBy,
+                        model.FullName,
+                        model.Role,
+                        Status = status,
+                        Msg    = msg
+                    }, trans);
+
+                trans.Commit();
+                return (true, msg, new { deleted, status });
             }
             catch (Exception)
             {

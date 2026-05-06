@@ -16,8 +16,8 @@ public class InvoiceService : IInvoiceService
 
     // ── Config mẫu hóa đơn ───────────────────────────────────────────
     private const string InvNameValue = "1";
-    private const string SerialMulti = "C26TAT"; // Đa thuế suất
-    private const string SerialSingle = "C26TAA"; // Đơn thuế suất
+    private const string SerialMulti = "C26TTS"; // Đa thuế suất
+    private const string SerialSingle = "C26TTS"; // Đơn thuế suất
 
     private static readonly JsonSerializerOptions _jsonOpts = new()
     {
@@ -263,7 +263,7 @@ public class InvoiceService : IInvoiceService
             : (distinctRates.Count == 1 ? distinctRates[0].ToString() : "0");
 
         var invSerial = invoiceType == InvoiceType.Multi ? SerialMulti : SerialSingle;
-        var invDate = (contract.ODate ?? DateTime.Now).ToString("yyyy/MM/dd");
+        var invDate = DateTime.Now.ToString("yyyy/MM/dd");
 
         var items = itemMappings.Select(x => new WinInvoiceItem
         {

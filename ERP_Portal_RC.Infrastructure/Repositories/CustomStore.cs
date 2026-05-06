@@ -128,6 +128,28 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             }
         }
 
+        public async Task<int> ChkUserByEmail(string email)
+        {
+            SqlConnection? connection = null;
+            try
+            {
+                connection = _dbConnectionFactory.OpenConnection(BosConfigureDb);
+                // bosUser lưu email trong cột Email — check tồn tại để tránh bosInsertUserOnApp trả về user cũ
+                return connection.QueryFirstOrDefault<int>(
+                    "SELECT COUNT(1) FROM bosConfigure.dbo.bosUser WITH (NOLOCK) WHERE Email = @Email",
+                    new { Email = email });
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+            finally
+            {
+                if (connection != null)
+                    _dbConnectionFactory.CloseConnection(connection);
+            }
+        }
+
         public async Task<IEnumerable<web_bosMenu_ByGroup>> GetApplicationToolsByGroupAsync(string groupList)
         {
             SqlConnection? connection = null;
@@ -192,17 +214,28 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
         public async Task<int> AddUserToGroup(string userCode)
         {
+            const string grpCode = "00006.00084.00121";
+
             SqlConnection? connection = null;
             IDbTransaction? transaction = null;
 
             try
             {
                 connection = _dbConnectionFactory.OpenConnection(BosOnlineDb);
+
+                // Kiểm tra đã tồn tại chưa — tránh lỗi PRIMARY KEY duplicate
+                int exists = connection.ExecuteScalar<int>(
+                    "SELECT COUNT(1) FROM bosConfigure.dbo.bosUserOnGroup WHERE Grp_Code = @GrpCode AND UserCode = @UserCode",
+                    new { GrpCode = grpCode, UserCode = userCode });
+
+                if (exists > 0)
+                    return 0; // đã có, bỏ qua
+
                 transaction = connection.BeginTransaction();
 
                 var parameters = new DynamicParameters();
                 parameters.Add("@DESCRIP", "NHÂN VIÊN.NHÂN VIÊN KINH DOANH.TOÀN HỆ THỐNG.CÔNG TY CP MONET");
-                parameters.Add("@Grp_Code", "00006.00084.00121");
+                parameters.Add("@Grp_Code", grpCode);
                 parameters.Add("@UserCode", userCode);
                 parameters.Add("@SignNumb", 0);
                 parameters.Add("@SignDate", DateTime.Now);
