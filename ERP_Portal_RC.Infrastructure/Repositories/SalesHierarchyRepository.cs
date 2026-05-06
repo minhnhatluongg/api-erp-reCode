@@ -84,19 +84,59 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         {
             using var connection = _dbConnectionFactory.OpenConnection(BosConfigureDb);
             string encryptedPassword = Sha1.Encrypt(password);
+
+            // ── Bước 1: Check bosUser đã có UserCode = emplId chưa ──────────
+            int alreadyExists = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(1) FROM bosConfigure.dbo.bosUser WITH (NOLOCK) WHERE UserCode = @UserCode",
+                new { UserCode = emplId });
+
+            if (alreadyExists > 0)
+                return emplId; // đã có, bỏ qua
+
+            // ── Bước 2: Gọi SP bosInsertUserOnApp ───────────────────────────
             var parameters = new DynamicParameters();
-
-            parameters.Add("@App", "EContract", DbType.String);
-            parameters.Add("@AppLoginCode", emplId, DbType.String); 
-            parameters.Add("@AppLoginName", loginName, DbType.String);
+            parameters.Add("@App",              "EContract",       DbType.String);
+            parameters.Add("@AppLoginCode",     emplId,            DbType.String);
+            parameters.Add("@AppLoginName",     loginName,         DbType.String);
             parameters.Add("@AppLoginPassword", encryptedPassword, DbType.String);
-            parameters.Add("@AppLoginFullName", fullName, DbType.String);
-            parameters.Add("@AppLoginEmail", email, DbType.String);
+            parameters.Add("@AppLoginFullName", fullName,          DbType.String);
+            parameters.Add("@AppLoginEmail",    email,             DbType.String);
 
-            return await connection.QueryFirstOrDefaultAsync<string>(
+            await connection.QueryFirstOrDefaultAsync<string>(
                 "bosConfigure.dbo.bosInsertUserOnApp",
                 param: parameters,
                 commandType: CommandType.StoredProcedure);
+
+            // ── Bước 3: Check lại bosUser sau khi gọi SP ────────────────────
+            // SP có thể match email/loginName → trả UserCode cũ, KHÔNG tạo emplId
+            int createdBysp = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(1) FROM bosConfigure.dbo.bosUser WITH (NOLOCK) WHERE UserCode = @UserCode",
+                new { UserCode = emplId });
+
+            if (createdBysp > 0)
+                return emplId; // SP tạo đúng
+
+            // ── Bước 4: SP không tạo được → INSERT trực tiếp vào bosUser ────
+            await connection.ExecuteAsync(@"
+                INSERT INTO bosConfigure.dbo.bosUser
+                    (UserCode, LoginName, Email, Password, FullName, DName,
+                     LanguageDefault, IsAcCtive, SignNumb, AcssRght,
+                     Crt_User, Crt_Date, ChgeUser, ChgeDate, CmpnID)
+                VALUES
+                    (@UserCode, @LoginName, @Email, @Password, @FullName, @DName,
+                     'VN', 1, 0, 7,
+                     '000015', GETDATE(), '000015', GETDATE(), '00')",
+                new
+                {
+                    UserCode  = emplId,
+                    LoginName = loginName,
+                    Email     = email,
+                    Password  = encryptedPassword,
+                    FullName  = fullName,
+                    DName     = fullName   // DName = tên hiển thị, dùng fullName làm mặc định
+                });
+
+            return emplId;
         }
 
         public async Task<Dictionary<string, string>> GetLoginNameBatchAsync(IEnumerable<string> userCodes)

@@ -591,6 +591,35 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
+        public async Task<ApiResponse<string>> PatchContractAsync(ContractPreviewRequest request, string userCode)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.OrderCode))
+                    return ApiResponse<string>.ErrorResponse("OID (OrderCode) không được để trống.", 400);
+
+                // Map giống SaveContract nhưng ChgeUser thay vì Crt_User
+                var master = MapToMaster(request, userCode);
+                master.ChgeUser = userCode;
+
+                // Details: null nếu FE không truyền → SP giữ nguyên details cũ
+                List<EContractDetails>? details = (request.Details != null && request.Details.Any())
+                    ? MapToDetails(request)
+                    : null;
+
+                await _eContractRepository.UpdateFullContractAsync(master, details);
+
+                return ApiResponse<string>.SuccessResponse(
+                    master.OID,
+                    "Cập nhật hợp đồng thành công. Hợp đồng đã về trạng thái nháp, có thể gửi duyệt lại.");
+            }
+            catch (Exception ex)
+            {
+                // SP RAISERROR trả message tiếng Việt → forward thẳng ra FE
+                return ApiResponse<string>.ErrorResponse($"Lỗi cập nhật hợp đồng: {ex.Message}", 500);
+            }
+        }
+
         public async Task<ContractStatusResponse> GetContractReviewDataAsync(string oid)
         {
             var raw = await _eContractRepository.GetContractStatusRawAsync(oid);
@@ -737,11 +766,33 @@ namespace ERP_Portal_RC.Application.Services
             try
             {
                 var result = await _eContractRepository.UnSignAsync(model, correlationId);
+
+                if (!result.Success)
+                    return ApiResponse<object>.ErrorResponse(result.Message, 422);
+
                 return ApiResponse<object>.SuccessResponse(result.Data, result.Message);
             }
             catch (Exception ex)
             {
                 return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi hủy ký: " + ex.Message);
+            }
+        }
+
+        public async Task<ApiResponse<object>> RutTrinhKyAsync(UnSignRequest model)
+        {
+            string correlationId = Guid.NewGuid().ToString();
+            try
+            {
+                var result = await _eContractRepository.RutTrinhKyAsync(model, correlationId);
+
+                if (!result.Success)
+                    return ApiResponse<object>.ErrorResponse(result.Message, 422);
+
+                return ApiResponse<object>.SuccessResponse(result.Data, result.Message);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi rút trình ký: " + ex.Message);
             }
         }
 
@@ -1776,7 +1827,8 @@ namespace ERP_Portal_RC.Application.Services
             var CN = await moneyTask;
             var resultMenu = await menuTask;
 
-            var dateFrom = !string.IsNullOrEmpty(request.FrmDate) ? request.FrmDate : "2010-01-01";
+            var defaultDate = DateTime.Now.AddMonths(-3).ToString("yyyy-MM-dd");
+            var dateFrom = !string.IsNullOrEmpty(request.FrmDate) ? request.FrmDate : defaultDate;
             var dateTo = !string.IsNullOrEmpty(request.ToDate) ? request.ToDate : DateTime.Now.AddDays(1).ToString("yyyy-MM-dd");
 
             string crtUser = userCode;// (resultMenu?.mode == 1 || request.IsUser == "1") ? userCode : "%";
@@ -1789,7 +1841,20 @@ namespace ERP_Portal_RC.Application.Services
                 decodedOID = Uri.UnescapeDataString(request.OIDSearch);
             }
 
-            string decodedSaleFilter = (string.IsNullOrEmpty(request.EmplChild) || request.EmplChild == "null") ? userCode : request.EmplChild;
+            string decodedSaleFilter = (string.IsNullOrEmpty(request.EmplChild) || request.EmplChild == "null") ? "" : request.EmplChild;
+
+            if (request.Page == null)
+            {
+                // Gán giá trị mặc định nếu người dùng không gửi gì lên
+                request.PageSize = 1;
+            }
+
+            if (request.PageSize == null)
+            {
+                // Gán giá trị mặc định nếu người dùng không gửi gì lên
+                request.PageSize = 100;
+            }
+
 
             var (data, subEmpl) = await _eContractRepository.GetPagedAsync_FilterBySale(
                     crtUser: userCode,
@@ -1798,8 +1863,8 @@ namespace ERP_Portal_RC.Application.Services
                     search: decodedOID,
                     SaleFilter: decodedSaleFilter,
                     statusFilter: null,
-                    page: 1,
-                    pageSize: 999
+                    page: request.Page,
+                    pageSize: request.PageSize
                 );
             result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
 

@@ -51,6 +51,10 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ContractStatusResponse> GetContractReviewDataAsync(string oid);
         Task<ApiResponse<object>> DeleteDraftAsync(DeleteEcontractRequest request, string username);
         Task<ApiResponse<object>> UnSignAsync(UnSignRequest model);
+        /// <summary>
+        /// Rút trình ký — chỉ cho phép khi hợp đồng đang ở SignNumb 101 và chưa có 301/501.
+        /// </summary>
+        Task<ApiResponse<object>> RutTrinhKyAsync(UnSignRequest model);
         // Lấy lịch sử Job của hợp đồng
         Task<ApiResponse<EContractHistoryResponse>> GetJobHistoryAsync(string oid);
         //Check yêu cầu kiểm tra của kd/sale.
@@ -92,5 +96,11 @@ namespace ERP_Portal_RC.Application.Interfaces
         string grpList,
         EContractPagedRequest request,
         string? saleFilter);
+
+        /// <summary>
+        /// Cập nhật hợp đồng (PATCH) — chỉ update field được truyền.
+        /// Dùng cho 2 case: sau UnSign hoặc kế toán từ chối.
+        /// </summary>
+        Task<ApiResponse<string>> PatchContractAsync(ContractPreviewRequest request, string userCode);
     }
 }

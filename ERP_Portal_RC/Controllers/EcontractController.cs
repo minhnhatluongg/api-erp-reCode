@@ -328,6 +328,39 @@ namespace API.ERP_Portal_RC.Controllers
         /// </summary>
         /// <param name="request">Dữ liệu hợp đồng từ các bước nhập liệu trên FE</param>
         /// <returns>Kết quả thực hiện</returns>
+        /// <summary>
+        /// Cập nhật hợp đồng (PATCH) — dùng cho 2 trường hợp:
+        ///   1. Sau khi gọi /unsign để gỡ ký → cập nhật thông tin → gửi duyệt lại.
+        ///   2. Kế toán từ chối → sale cập nhật và gửi lại.
+        ///
+        /// Chỉ update field nào được truyền vào (null = giữ nguyên giá trị cũ).
+        /// Details: nếu truyền vào thì xóa cũ và insert lại; nếu không truyền thì giữ nguyên.
+        /// Sau khi patch thành công, hợp đồng về SignNumb = -1 (nháp) và có thể gửi duyệt lại qua /save-and-approve.
+        ///
+        /// Không cho phép patch khi SignNumb = 301 (đã ký hoàn tất).
+        /// </summary>
+        [HttpPatch("{oid}")]
+        public async Task<IActionResult> PatchContract(
+            [FromRoute] string oid,
+            [FromBody] ContractPreviewRequest request)
+        {
+            if (request == null)
+                return BadRequest(ApiResponse<string>.ErrorResponse("Request body không được để trống."));
+
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userCode))
+                return Unauthorized(ApiResponse<string>.ErrorResponse("Không tìm thấy mã người dùng trong Token.", 401));
+
+            // OID từ route là source of truth — override bất kỳ giá trị nào FE set trong body
+            request.OrderCode = System.Net.WebUtility.UrlDecode(oid).Trim();
+
+            var result = await _econtractService.PatchContractAsync(request, userCode);
+
+            return result.Success
+                ? Ok(result)
+                : StatusCode(result.StatusCode, result);
+        }
+
         [HttpPost("save-and-approve")]
         public async Task<IActionResult> SaveAndApprove([FromBody] ContractPreviewRequest request)
         {
@@ -395,6 +428,36 @@ namespace API.ERP_Portal_RC.Controllers
             var result = await _econtractService.UnSignAsync(request);
             return Ok(result);
         }
+
+        /// <summary>
+        /// Rút trình ký hợp đồng — xóa hợp đồng khỏi hàng đợi duyệt.
+        ///
+        /// Điều kiện cho phép rút:
+        ///   - Hợp đồng đang ở SignNumb = 101 (đã trình ký, chưa ai duyệt).
+        ///   - Chưa có SignNumb 301 hoặc 501 (chưa được phê duyệt bởi người duyệt).
+        ///
+        /// Khác với /unsign (gỡ chữ ký đôi bên), API này chỉ rút hồ sơ khỏi hàng đợi.
+        /// Sau khi rút, hợp đồng về trạng thái chưa trình ký, có thể chỉnh sửa và gửi lại.
+        /// </summary>
+        [HttpPost("rut-trinh-ky")]
+        public async Task<IActionResult> RutTrinhKy([FromBody] UnSignRequest request)
+        {
+            if (string.IsNullOrEmpty(request.OID))
+                return BadRequest(ApiResponse<object>.ErrorResponse("OID không được để trống."));
+
+            if (string.IsNullOrEmpty(request.Reason))
+                return BadRequest(ApiResponse<object>.ErrorResponse("Lý do rút trình ký là bắt buộc."));
+
+            if (string.IsNullOrEmpty(request.RequestedBy))
+                request.RequestedBy = User.FindFirstValue("UserCode") ?? User.Identity?.Name ?? "system";
+
+            var result = await _econtractService.RutTrinhKyAsync(request);
+
+            return result.Success
+                ? Ok(result)
+                : StatusCode(422, result);
+        }
+
         /// <summary>
         /// Lấy lịch sử các job xử lý theo OID hợp đồng.
         /// </summary>

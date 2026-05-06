@@ -44,12 +44,19 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<Template> GetTemplateByCodeAsync(string factorId);
 
         Task<string> SaveFullContractAsync(EContractMaster master, List<EContractDetails> details);
+        /// <summary>
+        /// Cập nhật hợp đồng (PATCH) — chỉ update field được truyền, details xóa + insert lại.
+        /// Không cho phép update khi SignNumb = 201 (đã ký hoàn tất).
+        /// </summary>
+        Task<string> UpdateFullContractAsync(EContractMaster master, List<EContractDetails>? details);
         Task CreateApprovalFlowAsync(EContractMaster master);
         Task<EContractStatusRaw> GetContractStatusRawAsync(string oid);
         // Nghiệp vụ xóa nháp
         Task<(int Ok, string Message)> DeleteDraftAsync(string oid, string username);
         // Nghiệp vụ hủy ký (Yêu cầu Transaction)
         Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId);
+        // Nghiệp vụ rút trình ký — chỉ cho phép khi chưa có SignNumb 301/501
+        Task<(bool Success, string Message, object Data)> RutTrinhKyAsync(UnSignRequest model, string correlationId);
         //Nghiệp vụ lịch sử Job 
         Task<EContractHistoryRaw> GetFullHistoryDataAsync(string oid);
         // Check job có yêu cầu kiểm tra của kd/sales chưa?
