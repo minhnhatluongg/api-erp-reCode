@@ -95,9 +95,6 @@ namespace API.ERP_Portal_RC.Controllers
                     EventType    = "INVOICE_EXPORTED",
                     ContractOid  = oid,
                     InvoiceNo    = request.InvoiceNo,
-                    InvoiceSign  = request.InvoiceSign,
-                    InvoiceDate  = request.InvoiceDate,
-                    GovCode      = request.GovCode,
                     SourceAction = request.SourceAction,
                     RawPayload   = rawPayload,
                     ClientIp     = clientIp,
@@ -109,7 +106,7 @@ namespace API.ERP_Portal_RC.Controllers
                 return StatusCode(500, ApiResponse<object>.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 500));
             }
 
-            // ── 4. Ghi log kết quả 
+            // ── 4. Ghi log kết quả
             string status = result.success ? "SUCCESS"
                           : result.message.Contains("201") ? "DUPLICATE"
                           : "FAILED";
@@ -119,9 +116,9 @@ namespace API.ERP_Portal_RC.Controllers
                 EventType    = "INVOICE_EXPORTED",
                 ContractOid  = oid,
                 InvoiceNo    = request.InvoiceNo,
-                InvoiceSign  = request.InvoiceSign,
-                InvoiceDate  = request.InvoiceDate,
-                GovCode      = request.GovCode,
+                InvoiceSign  = null,
+                InvoiceDate  = null,
+                GovCode      = null,
                 SourceAction = request.SourceAction,
                 RawPayload   = rawPayload,
                 ClientIp     = clientIp,

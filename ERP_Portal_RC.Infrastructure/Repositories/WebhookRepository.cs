@@ -93,7 +93,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 p.Add("@nextSignNumb",  201);
                 p.Add("@AppvRouteGroup","");
                 p.Add("@AppvRouteGrpTp",1);
-                p.Add("@AppvMess",      "Webhook: Đã xuất Hóa Đơn Điện Tử thành công");
+                p.Add("@AppvMess",      "Webhook-App: Đã xuất Hóa Đơn Điện Tử thành công");
                 foreach (var i in Enumerable.Range(1, 25))
                     p.Add($"@Variant{i:D2}", "");
                 p.Add("@Variant19",     contractOid);
