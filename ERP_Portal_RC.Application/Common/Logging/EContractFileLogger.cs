@@ -20,8 +20,12 @@ namespace ERP_Portal_RC.Domain.Common.Logging
         {
             _filePrefix = filePrefix;
 
-            _logDirectory = configuration["EContractLogConfig:LogPath"]
-                         ?? Path.Combine(AppContext.BaseDirectory, "Logs", "EContract");
+            var configPath = configuration["EContractLogConfig:LogPath"]
+                          ?? "Logs/EContract";
+
+            _logDirectory = Path.IsPathRooted(configPath)
+                ? configPath
+                : Path.Combine(AppContext.BaseDirectory, configPath);
 
             _retentionDays = int.TryParse(
                 configuration["EContractLogConfig:RetentionDays"], out var days)

@@ -38,7 +38,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             }
         }
 
-        // ── Nâng trạng thái 101 → 201 ────────────────────────────────────────
+        // ── Nâng trạng thái 101 → 301 ────────────────────────────────────────
         public async Task<(bool Success, string Message)> AdvanceInvoiceExportedAsync(
             string contractOid, string userId = "WEBHOOK")
         {
@@ -66,16 +66,16 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                   ORDER BY Crt_Date DESC",
                 new { ContractOid = contractOid });
 
-            if (currentSign == 201)
-                return (false, $"Hợp đồng '{contractOid}' đã ở trạng thái 201 (đã xuất HĐĐT). Bỏ qua.");
+            if (currentSign == 301)
+                return (false, $"Hợp đồng '{contractOid}' đã ở trạng thái 301 (đã xuất HĐĐT). Bỏ qua.");
 
             if (currentSign == null)
                 return (false, $"Không tìm thấy bản ghi zsgn cho Job JOB_00005/JB:010 của '{contractOid}'.");
 
             if (currentSign != 101)
-                return (false, $"Hợp đồng '{contractOid}' đang ở SignNumb={currentSign}, không phải 101. Không thể nâng lên 201.");
+                return (false, $"Hợp đồng '{contractOid}' đang ở SignNumb={currentSign}, không phải 101. Không thể nâng lên 301.");
 
-            // 3. Gọi zsgn_EContractJobs_NOR: 101 → 201
+            // 3. Gọi zsgn_EContractJobs_NOR: 101 → 301
             if (connApproval.State == ConnectionState.Closed) connApproval.Open();
             using var trans = connApproval.BeginTransaction();
             try
@@ -90,7 +90,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 p.Add("@SignTble",      "zsgn_EContractJobs");
                 p.Add("@SignChck",      0);
                 p.Add("@holdSignNumb",  101);
-                p.Add("@nextSignNumb",  201);
+                p.Add("@nextSignNumb",  301);
                 p.Add("@AppvRouteGroup","");
                 p.Add("@AppvRouteGrpTp",1);
                 p.Add("@AppvMess",      "Webhook-App: Đã xuất Hóa Đơn Điện Tử thành công");
@@ -113,7 +113,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
                 bool ok = (int)result.ExecValue == 1;
                 return (ok, ok
-                    ? $"Cập nhật SignNumb 201 thành công (Job: {jobOid})."
+                    ? $"Cập nhật SignNumb 301 thành công (Job: {jobOid})."
                     : $"zsgn_EContractJobs_NOR trả về thất bại (Job: {jobOid}).");
             }
             catch (Exception ex)
@@ -141,8 +141,8 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             // Đã ở 101 hoặc 201 → idempotent
             if (currentSign == 101)
                 return (true, $"Hợp đồng '{contractOid}' đã ở trạng thái 101 (đang chờ xuất). Không cần thao tác.");
-            if (currentSign == 201)
-                return (true, $"Hợp đồng '{contractOid}' đã xuất HĐĐT (SignNumb=201). Không cần thao tác.");
+            if (currentSign == 301)
+                return (true, $"Hợp đồng '{contractOid}' đã xuất HĐĐT (SignNumb=301). Không cần thao tác.");
 
             // ── Bước 2: Tìm / tạo job JOB_00005 ────────────────────────────
             var jobOid = await connOnline.QueryFirstOrDefaultAsync<string?>(

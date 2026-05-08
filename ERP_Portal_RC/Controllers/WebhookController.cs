@@ -1,6 +1,6 @@
 using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Domain.Common;
-using ERP_Portal_RC.Domain.Entities;
+using ERP_Portal_RC.Domain.Common.Logging;
 using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -9,31 +9,35 @@ using System.Text.Json;
 namespace API.ERP_Portal_RC.Controllers
 {
     /// <summary>
-    /// Webhook nhận callback từ hệ thống WinInvoice khi xuất HĐĐT thành công.
+    /// Webhook nhận callback từ hệ thống WinInvoice + ERP khi xuất HĐĐT.
     /// Bảo vệ bằng InternalKey + Rate Limiting.
+    /// Log ra file: Logs/ExternalApi/Webhook_{date}.log
     /// </summary>
     [ApiController]
     [Route("api/webhook")]
     [EnableRateLimiting("webhook")]
     public class WebhookController : ControllerBase
     {
-        private readonly IWebhookRepository _repo;
+        private readonly IWebhookRepository  _repo;
         private readonly ILogger<WebhookController> _logger;
-        private readonly IConfiguration _config;
+        private readonly IConfiguration      _config;
+        private readonly WebhookFileLogger   _fileLogger;
 
         public WebhookController(
             IWebhookRepository repo,
             ILogger<WebhookController> logger,
-            IConfiguration config)
+            IConfiguration config,
+            WebhookFileLogger fileLogger)
         {
-            _repo   = repo;
-            _logger = logger;
-            _config = config;
+            _repo       = repo;
+            _logger     = logger;
+            _config     = config;
+            _fileLogger = fileLogger;
         }
 
         /// <summary>
         /// Nhận callback khi hóa đơn điện tử đã xuất thành công.
-        /// Cập nhật SignNumb = 201 cho JOB_00005/JB:010.
+        /// Cập nhật SignNumb = 301 cho JOB_00005/JB:010.
         ///
         /// Header yêu cầu: X-Internal-Key: {key}
         /// </summary>
@@ -43,44 +47,38 @@ namespace API.ERP_Portal_RC.Controllers
         [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
         public async Task<IActionResult> InvoiceExported([FromBody] InvoiceWebhookRequest request)
         {
-            var clientIp  = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            var rawPayload = JsonSerializer.Serialize(request);
+            var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
-            // ── 1. Validate InternalKey
+            // ── 1. Validate InternalKey ──────────────────────────────────────
             var expectedKey = _config["Webhook:InternalKey"];
             var providedKey = Request.Headers["X-Internal-Key"].FirstOrDefault();
 
             if (string.IsNullOrEmpty(expectedKey) || providedKey != expectedKey)
             {
-                _logger.LogWarning("[Webhook] UNAUTHORIZED — IP={Ip}, OID={Oid}", clientIp, request.ContractOid);
-
-                await _repo.WriteLogAsync(new WebhookLog
-                {
-                    EventType    = "INVOICE_EXPORTED",
-                    ContractOid  = request.ContractOid ?? "",
-                    ClientIp     = clientIp,
-                    RawPayload   = rawPayload,
-                    Status       = "BLOCKED",
-                    ErrorMessage = "Invalid or missing X-Internal-Key",
-                    CreatedAt    = DateTime.Now
-                });
+                await _fileLogger.LogInboundAsync(
+                    correlationId: request.ContractOid ?? "unknown",
+                    endpoint: "invoice-exported",
+                    status: "BLOCKED",
+                    clientIp: clientIp,
+                    payload: request,
+                    message: "Invalid or missing X-Internal-Key");
 
                 return Unauthorized(new { message = "Invalid or missing X-Internal-Key." });
             }
 
-            // ── 2. Validate request 
             if (string.IsNullOrWhiteSpace(request.ContractOid))
-            {
                 return BadRequest(ApiResponse<object>.ErrorResponse("ContractOid là bắt buộc.", 400));
-            }
 
             string oid = request.ContractOid.Trim();
 
-            _logger.LogInformation(
-                "[Webhook] RECEIVED — OID={Oid}, InvoiceNo={No}, IP={Ip}",
-                oid, request.InvoiceNo, clientIp);
+            await _fileLogger.LogInboundAsync(
+                correlationId: oid,
+                endpoint: "invoice-exported",
+                status: "RECEIVED",
+                clientIp: clientIp,
+                payload: request);
 
-            // ── 3. Xử lý: nâng SignNumb 101 → 201 
+            // ── 2. Xử lý: nâng SignNumb 101 → 201 ───────────────────────────
             (bool success, string message) result;
             try
             {
@@ -88,48 +86,20 @@ namespace API.ERP_Portal_RC.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Webhook] EXCEPTION — OID={Oid}", oid);
-
-                await _repo.WriteLogAsync(new WebhookLog
-                {
-                    EventType    = "INVOICE_EXPORTED",
-                    ContractOid  = oid,
-                    InvoiceNo    = request.InvoiceNo,
-                    SourceAction = request.SourceAction,
-                    RawPayload   = rawPayload,
-                    ClientIp     = clientIp,
-                    Status       = "FAILED",
-                    ErrorMessage = ex.Message,
-                    CreatedAt    = DateTime.Now
-                });
-
+                await _fileLogger.LogErrorAsync(oid, "invoice-exported", ex.Message, request);
                 return StatusCode(500, ApiResponse<object>.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 500));
             }
 
-            // ── 4. Ghi log kết quả
             string status = result.success ? "SUCCESS"
                           : result.message.Contains("201") ? "DUPLICATE"
                           : "FAILED";
 
-            await _repo.WriteLogAsync(new WebhookLog
-            {
-                EventType    = "INVOICE_EXPORTED",
-                ContractOid  = oid,
-                InvoiceNo    = request.InvoiceNo,
-                InvoiceSign  = null,
-                InvoiceDate  = null,
-                GovCode      = null,
-                SourceAction = request.SourceAction,
-                RawPayload   = rawPayload,
-                ClientIp     = clientIp,
-                Status       = status,
-                ErrorMessage = result.success ? null : result.message,
-                CreatedAt    = DateTime.Now
-            });
-
-            _logger.LogInformation(
-                "[Webhook] {Status} — OID={Oid} | {Message}",
-                status, oid, result.message);
+            await _fileLogger.LogInboundAsync(
+                correlationId: oid,
+                endpoint: "invoice-exported",
+                status: status,
+                clientIp: clientIp,
+                message: result.message);
 
             return Ok(ApiResponse<object>.SuccessResponse(
                 new { oid, status, message = result.message },
@@ -150,8 +120,7 @@ namespace API.ERP_Portal_RC.Controllers
         [HttpPost("request-invoice")]
         public async Task<IActionResult> RequestInvoice([FromBody] RequestInvoiceWebhookRequest request)
         {
-            var clientIp   = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            var rawPayload = System.Text.Json.JsonSerializer.Serialize(request);
+            var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
             // ── 1. Validate InternalKey ──────────────────────────────────────
             var expectedKey = _config["Webhook:InternalKey"];
@@ -159,38 +128,32 @@ namespace API.ERP_Portal_RC.Controllers
 
             if (string.IsNullOrEmpty(expectedKey) || providedKey != expectedKey)
             {
-                _logger.LogWarning("[Webhook:RequestInvoice] UNAUTHORIZED — IP={Ip}, OID={Oid}",
-                    clientIp, request.ContractOid);
-
-                await _repo.WriteLogAsync(new WebhookLog
-                {
-                    EventType    = "REQUEST_INVOICE",
-                    ContractOid  = request.ContractOid ?? "",
-                    SourceAction = request.Note,
-                    RawPayload   = rawPayload,
-                    ClientIp     = clientIp,
-                    Status       = "BLOCKED",
-                    ErrorMessage = "Invalid or missing X-Internal-Key",
-                    CreatedAt    = DateTime.Now
-                });
+                await _fileLogger.LogInboundAsync(
+                    correlationId: request.ContractOid ?? "unknown",
+                    endpoint: "request-invoice",
+                    status: "BLOCKED",
+                    clientIp: clientIp,
+                    payload: request,
+                    message: "Invalid or missing X-Internal-Key");
 
                 return Unauthorized(new { message = "Invalid or missing X-Internal-Key." });
             }
 
-            // ── 2. Validate request ──────────────────────────────────────────
             if (string.IsNullOrWhiteSpace(request.ContractOid))
                 return BadRequest(ApiResponse<object>.ErrorResponse("ContractOid là bắt buộc.", 400));
 
             string oid    = request.ContractOid.Trim();
             string userId = string.IsNullOrWhiteSpace(request.RequestedBy)
-                ? "WEBHOOK"
-                : request.RequestedBy.Trim();
+                ? "WEBHOOK" : request.RequestedBy.Trim();
 
-            _logger.LogInformation(
-                "[Webhook:RequestInvoice] RECEIVED — OID={Oid}, RequestedBy={User}, IP={Ip}",
-                oid, userId, clientIp);
+            await _fileLogger.LogInboundAsync(
+                correlationId: oid,
+                endpoint: "request-invoice",
+                status: "RECEIVED",
+                clientIp: clientIp,
+                payload: new { request.ContractOid, request.RequestedBy, request.Note });
 
-            // ── 3. Xử lý ────────────────────────────────────────────────────
+            // ── 2. Xử lý ────────────────────────────────────────────────────
             (bool success, string message) result;
             try
             {
@@ -198,41 +161,18 @@ namespace API.ERP_Portal_RC.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[Webhook:RequestInvoice] EXCEPTION — OID={Oid}", oid);
-
-                await _repo.WriteLogAsync(new WebhookLog
-                {
-                    EventType    = "REQUEST_INVOICE",
-                    ContractOid  = oid,
-                    SourceAction = request.Note,
-                    RawPayload   = rawPayload,
-                    ClientIp     = clientIp,
-                    Status       = "FAILED",
-                    ErrorMessage = ex.Message,
-                    CreatedAt    = DateTime.Now
-                });
-
+                await _fileLogger.LogErrorAsync(oid, "request-invoice", ex.Message);
                 return StatusCode(500, ApiResponse<object>.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 500));
             }
 
-            // ── 4. Ghi log ───────────────────────────────────────────────────
             string status = result.success ? "SUCCESS" : "FAILED";
 
-            await _repo.WriteLogAsync(new WebhookLog
-            {
-                EventType    = "REQUEST_INVOICE",
-                ContractOid  = oid,
-                SourceAction = request.Note,
-                RawPayload   = rawPayload,
-                ClientIp     = clientIp,
-                Status       = status,
-                ErrorMessage = result.success ? null : result.message,
-                CreatedAt    = DateTime.Now
-            });
-
-            _logger.LogInformation(
-                "[Webhook:RequestInvoice] {Status} — OID={Oid} | {Message}",
-                status, oid, result.message);
+            await _fileLogger.LogInboundAsync(
+                correlationId: oid,
+                endpoint: "request-invoice",
+                status: status,
+                clientIp: clientIp,
+                message: result.message);
 
             return Ok(ApiResponse<object>.SuccessResponse(
                 new { oid, status, message = result.message },
