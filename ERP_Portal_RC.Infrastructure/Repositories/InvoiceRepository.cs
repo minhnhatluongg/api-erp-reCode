@@ -1,20 +1,19 @@
-﻿using ERP_Portal_RC.Domain.EntitiesInvoice;
+﻿using Dapper;
+using ERP_Portal_RC.Domain.EntitiesInvoice;
 using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace ERP_Portal_RC.Infrastructure.Repositories
 {
     public class InvoiceRepository : IInvoiceRepository
     {
-        private readonly HttpClient _httpClient;
+        private readonly HttpClient          _httpClient;
         private readonly ILogger<InvoiceRepository> _logger;
+        private readonly IDbConnectionFactory _dbConnectionFactory;
+
+        private const string BosEVAT = "BosEVAT";
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -22,10 +21,14 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             WriteIndented = false
         };
 
-        public InvoiceRepository(IHttpClientFactory httpClientFactory, ILogger<InvoiceRepository> logger)
+        public InvoiceRepository(
+            IHttpClientFactory httpClientFactory,
+            ILogger<InvoiceRepository> logger,
+            IDbConnectionFactory dbConnectionFactory)
         {
-            _httpClient = httpClientFactory.CreateClient("WinInvoiceClient");
-            _logger = logger;
+            _httpClient          = httpClientFactory.CreateClient("WinInvoiceClient");
+            _logger              = logger;
+            _dbConnectionFactory = dbConnectionFactory;
         }
 
         public async Task<WinInvoiceCreateResponse> CreateInvoiceAsync(
@@ -92,6 +95,16 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     InvRef       = winInvoiceInvRef
                 };
             }
+        }
+
+        public async Task<SaleInfo?> GetSaleInfoByInvRefAsync(string contractOid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosEVAT);
+            return await conn.QueryFirstOrDefaultAsync<SaleInfo>(
+                "GetSaleInfo_ByInvRef",
+                new { InvRef = contractOid },
+                commandType: System.Data.CommandType.StoredProcedure,
+                commandTimeout: 30);
         }
     }
 }

@@ -18,5 +18,11 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<WinInvoiceCreateResponse> CreateInvoiceAsync(
             WinInvoiceCreateRequest payload,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Lấy thông tin Sale (Email, FullName...) từ OID hợp đồng.
+        /// Dùng SP: GetSaleInfo_ByInvRef trong BosEVAT.
+        /// </summary>
+        Task<SaleInfo?> GetSaleInfoByInvRefAsync(string contractOid);
     }
 }
