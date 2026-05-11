@@ -2,6 +2,7 @@
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -193,6 +194,252 @@ namespace API.ERP_Portal_RC.Controllers
                 Files = files
             };
             return Ok(ApiResponse<ContractFilesResponse>.SuccessResponse(response));
+        }
+
+        // ── API: User xem TẤT CẢ file của mình (Attachments + KyThuatMau) ──────
+        /// <summary>
+        /// Lấy toàn bộ file của user đang đăng nhập:
+        ///   - Attachments: file đính kèm đã upload trong tất cả tháng
+        ///   - KyThuatMau: file mẫu đã upload
+        /// Filter theo UserCode lấy từ JWT token (không cần truyền userCode).
+        /// Có thể filter thêm theo năm (year), mặc định lấy tất cả.
+        /// </summary>
+        [HttpGet("my-files")]
+        [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<ContractAllFilesResponse>), StatusCodes.Status200OK)]
+        public IActionResult GetMyFiles([FromQuery] int? year = null)
+        {
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrWhiteSpace(userCode))
+                return Unauthorized(ApiResponse<object>.ErrorResponse("Không xác định được UserCode từ token.", 401));
+
+            string uploadRoot  = _configuration["FileUpload:PhysicalRootPath"]
+                              ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\Attachments";
+            string kyThuatRoot = _configuration["FileUpload:KyThuatMauPath"]
+                              ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\KyThuatMau";
+            string baseUrl     = (_configuration["FileUpload:BaseUrl"] ?? "").TrimEnd('/');
+
+            var response = new ContractAllFilesResponse { Oid = userCode };
+
+            // ── Phần 1: Attachments — scan year/month, lọc folder bắt đầu bằng userCode_ ──
+            if (Directory.Exists(uploadRoot))
+            {
+                var yearDirs = Directory.GetDirectories(uploadRoot);
+
+                // Lọc theo năm nếu có truyền
+                if (year.HasValue)
+                    yearDirs = yearDirs
+                        .Where(d => Path.GetFileName(d) == year.Value.ToString())
+                        .ToArray();
+
+                foreach (var yearDir in yearDirs)
+                    foreach (var monthDir in Directory.GetDirectories(yearDir))
+                        foreach (var oidDir in Directory.GetDirectories(monthDir))
+                        {
+                            // Chỉ lấy folder của user này
+                            var folderName = Path.GetFileName(oidDir);
+                            if (!folderName.StartsWith(userCode + "_",
+                                StringComparison.OrdinalIgnoreCase)) continue;
+
+                            var metaPath = Path.Combine(oidDir, "metadata.json");
+                            if (!System.IO.File.Exists(metaPath)) continue;
+
+                            var list = JsonSerializer.Deserialize<List<ContractFileMetadata>>(
+                                System.IO.File.ReadAllText(metaPath)) ?? new();
+
+                            response.Attachments.AddRange(list.Select(f => new ContractFileItem
+                            {
+                                FileName     = f.FileName,
+                                OriginalName = f.OriginalName,
+                                Url          = f.Url,
+                                Extension    = f.Extension,
+                                SizeBytes    = f.SizeBytes,
+                                UploadedAt   = f.UploadedAt,
+                                Category     = "attach"
+                            }));
+                        }
+            }
+
+            // ── Phần 2: KyThuatMau — folder bắt đầu bằng userCode_ ──────────
+            if (Directory.Exists(kyThuatRoot))
+            {
+                foreach (var oidDir in Directory.GetDirectories(kyThuatRoot))
+                {
+                    var folderName = Path.GetFileName(oidDir);
+                    if (!folderName.StartsWith(userCode + "_",
+                        StringComparison.OrdinalIgnoreCase)) continue;
+
+                    // Lọc theo năm nếu có (dùng creation time của folder)
+                    if (year.HasValue)
+                    {
+                        var folderDate = Directory.GetCreationTime(oidDir);
+                        if (folderDate.Year != year.Value) continue;
+                    }
+
+                    foreach (var filePath in Directory.GetFiles(oidDir, "*.*",
+                        SearchOption.AllDirectories))
+                    {
+                        var info = new FileInfo(filePath);
+                        if (info.Name.Equals("metadata.json",
+                            StringComparison.OrdinalIgnoreCase)) continue;
+
+                        var rel = Path.GetRelativePath(
+                            Path.GetDirectoryName(kyThuatRoot)!, filePath)
+                            .Replace("\\", "/");
+
+                        response.Templates.Add(new ContractFileItem
+                        {
+                            FileName     = info.Name,
+                            OriginalName = info.Name,
+                            Url          = $"{baseUrl}/{rel}",
+                            Extension    = info.Extension.ToLowerInvariant(),
+                            SizeBytes    = info.Length,
+                            UploadedAt   = info.CreationTime,
+                            Category     = "template"
+                        });
+                    }
+                }
+            }
+
+            response.Attachments = response.Attachments.OrderByDescending(f => f.UploadedAt).ToList();
+            response.Templates   = response.Templates.OrderByDescending(f => f.UploadedAt).ToList();
+
+            return Ok(ApiResponse<ContractAllFilesResponse>.SuccessResponse(
+                response,
+                $"User {userCode}: {response.TotalAttachments} file đính kèm, {response.TotalTemplates} file mẫu."));
+        }
+
+        // ── API 1: User xem file đính kèm hợp đồng ────────────────────────────
+        /// <summary>
+        /// Lấy toàn bộ file đính kèm của hợp đồng (do user upload).
+        /// Scan tất cả năm/tháng — không cần truyền year/month.
+        /// Yêu cầu đăng nhập (JWT).
+        /// </summary>
+        [HttpGet("contract-files")]
+        [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<ContractFilesResponse>), StatusCodes.Status200OK)]
+        public IActionResult GetContractFiles([FromQuery] string oid)
+        {
+            if (string.IsNullOrWhiteSpace(oid))
+                return BadRequest(ApiResponse<object>.ErrorResponse("Thiếu OID."));
+
+            string cleanOid  = oid.Replace("/", "_").Replace(":", "_").Trim();
+            string uploadRoot = _configuration["FileUpload:PhysicalRootPath"]
+                             ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\Attachments";
+            string baseUrl   = _configuration["FileUpload:BaseUrl"] ?? "";
+
+            var files = new List<ContractFileMetadata>();
+
+            if (Directory.Exists(uploadRoot))
+            {
+                foreach (var yearDir in Directory.GetDirectories(uploadRoot))
+                    foreach (var monthDir in Directory.GetDirectories(yearDir))
+                    {
+                        var metaPath = Path.Combine(monthDir, cleanOid, "metadata.json");
+                        if (!System.IO.File.Exists(metaPath)) continue;
+
+                        var list = JsonSerializer.Deserialize<List<ContractFileMetadata>>(
+                            System.IO.File.ReadAllText(metaPath)) ?? new();
+                        files.AddRange(list);
+                    }
+            }
+
+            var result = new ContractFilesResponse
+            {
+                Oid        = oid,
+                TotalFiles = files.Count,
+                Files      = files.OrderByDescending(f => f.UploadedAt).ToList()
+            };
+
+            return Ok(ApiResponse<ContractFilesResponse>.SuccessResponse(
+                result, $"Tìm thấy {files.Count} file đính kèm."));
+        }
+
+        // ── API 2: Kỹ thuật xem tất cả file (Attachments + KyThuatMau) ────────
+        /// <summary>
+        /// Lấy TẤT CẢ file liên quan đến hợp đồng dành cho kỹ thuật:
+        ///   - File đính kèm do user upload (Attachments folder)
+        ///   - File mẫu kỹ thuật (KyThuatMau folder)
+        /// Yêu cầu đăng nhập (JWT).
+        /// </summary>
+        [HttpGet("technical-files")]
+        [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<ContractAllFilesResponse>), StatusCodes.Status200OK)]
+        public IActionResult GetTechnicalFiles([FromQuery] string oid)
+        {
+            if (string.IsNullOrWhiteSpace(oid))
+                return BadRequest(ApiResponse<object>.ErrorResponse("Thiếu OID."));
+
+            string cleanOid      = oid.Replace("/", "_").Replace(":", "_").Trim();
+            string uploadRoot    = _configuration["FileUpload:PhysicalRootPath"]
+                                ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\Attachments";
+            string kyThuatRoot   = _configuration["FileUpload:KyThuatMauPath"]
+                                ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\KyThuatMau";
+            string baseUrl       = (_configuration["FileUpload:BaseUrl"] ?? "").TrimEnd('/');
+
+            var response = new ContractAllFilesResponse { Oid = oid };
+
+            // ── Phần 1: Attachments (metadata.json) ──────────────────────────
+            if (Directory.Exists(uploadRoot))
+            {
+                foreach (var yearDir in Directory.GetDirectories(uploadRoot))
+                    foreach (var monthDir in Directory.GetDirectories(yearDir))
+                    {
+                        var metaPath = Path.Combine(monthDir, cleanOid, "metadata.json");
+                        if (!System.IO.File.Exists(metaPath)) continue;
+
+                        var list = JsonSerializer.Deserialize<List<ContractFileMetadata>>(
+                            System.IO.File.ReadAllText(metaPath)) ?? new();
+
+                        response.Attachments.AddRange(list.Select(f => new ContractFileItem
+                        {
+                            FileName     = f.FileName,
+                            OriginalName = f.OriginalName,
+                            Url          = f.Url,
+                            Extension    = f.Extension,
+                            SizeBytes    = f.SizeBytes,
+                            UploadedAt   = f.UploadedAt,
+                            Category     = "attach"
+                        }));
+                    }
+            }
+
+            // ── Phần 2: KyThuatMau folder ────────────────────────────────────
+            var kyThuatDir = Path.Combine(kyThuatRoot, cleanOid);
+            if (Directory.Exists(kyThuatDir))
+            {
+                foreach (var filePath in Directory.GetFiles(kyThuatDir, "*.*",
+                    SearchOption.AllDirectories))
+                {
+                    var info = new FileInfo(filePath);
+                    if (info.Name.Equals("metadata.json", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    // Build URL tương đối từ wwwroot
+                    var rel = Path.GetRelativePath(
+                        Path.GetDirectoryName(kyThuatRoot)!, filePath)
+                        .Replace("\\", "/");
+
+                    response.Templates.Add(new ContractFileItem
+                    {
+                        FileName     = info.Name,
+                        OriginalName = info.Name,
+                        Url          = $"{baseUrl}/{rel}",
+                        Extension    = info.Extension.ToLowerInvariant(),
+                        SizeBytes    = info.Length,
+                        UploadedAt   = info.CreationTime,
+                        Category     = "template"
+                    });
+                }
+            }
+
+            // Sắp xếp theo ngày mới nhất
+            response.Attachments = response.Attachments.OrderByDescending(f => f.UploadedAt).ToList();
+            response.Templates   = response.Templates.OrderByDescending(f => f.UploadedAt).ToList();
+
+            return Ok(ApiResponse<ContractAllFilesResponse>.SuccessResponse(
+                response,
+                $"Tìm thấy {response.TotalAttachments} file đính kèm, {response.TotalTemplates} file mẫu."));
         }
 
         // ── Helper ─────────────────────────────────────────────────────────────
