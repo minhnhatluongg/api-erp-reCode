@@ -10,7 +10,7 @@ using System.Security.Claims;
 
 namespace API.ERP_Portal_RC.Controllers
 {
-	//[Authorize]
+	[Authorize]
 	[Route("api/[controller]")]
 	[ApiController]
 	public class RptUsedController : Controller
