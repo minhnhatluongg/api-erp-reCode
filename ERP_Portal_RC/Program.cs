@@ -146,6 +146,11 @@ builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IServiceTypeRepository, ServiceTypeRepository>();
 builder.Services.AddScoped<ITvanRenewalRepository, TvanRenewalRepository>();
 
+//
+builder.Services.AddScoped<IRptUsedService, RptUsedService>();
+builder.Services.AddScoped<IRptUsedRepository, RptUsedRepository>();
+
+
 // Configure Identity (cần cấu hình DbContext riêng cho Identity nếu sử dụng)
 // Tạm thời comment để không bị lỗi nếu chưa có DbContext
 // builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
