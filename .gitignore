@@ -58,3 +58,4 @@ deploy-remote.ps1
 _publish_output/
 Scripts/
 *.sql
+docs

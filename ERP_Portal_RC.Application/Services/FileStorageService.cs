@@ -46,7 +46,15 @@ namespace ERP_Portal_RC.Domain.Interfaces
 
         public async Task<string> UploadFileAsync(IFormFile file, string subFolder, CancellationToken ct)
         {
-            if (file == null || file.Length == 0) return "";
+            // Wrapper giữ tương thích cũ — không có UploadedBy
+            var meta = await UploadFileAsync(file, subFolder, uploadedBy: "", ct);
+            return meta?.RelativePath ?? "";
+        }
+
+        public async Task<ContractFileMetadata> UploadFileAsync(
+            IFormFile file, string subFolder, string uploadedBy, CancellationToken ct)
+        {
+            if (file == null || file.Length == 0) return null!;
 
             string uploadRoot = _configuration["FileUpload:PhysicalRootPath"]
                 ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\Attachments";
@@ -54,7 +62,13 @@ namespace ERP_Portal_RC.Domain.Interfaces
             var now = DateTime.Now;
             string year = now.Year.ToString();
             string month = now.Month.ToString("00");
-            string cleanFolder = subFolder.Replace("/", "_").Replace(":", "_").Trim();
+
+            // Folder lưu: {userCode}_{oid_clean} — để API my-files có thể lọc theo userCode_
+            string cleanOid = subFolder.Replace("/", "_").Replace(":", "_").Trim();
+            string cleanFolder = string.IsNullOrWhiteSpace(uploadedBy)
+                ? cleanOid
+                : $"{uploadedBy}_{cleanOid}";
+
             string relDir = Path.Combine(year, month, cleanFolder);
             string physDir = Path.Combine(uploadRoot, relDir);
 
@@ -68,10 +82,9 @@ namespace ERP_Portal_RC.Domain.Interfaces
             await using var stream = new FileStream(fullPath, FileMode.Create);
             await file.CopyToAsync(stream, ct);
 
-            // Lưu metadata
-            await AppendMetadataAsync(physDir, relDir, fileName, file, subFolder, now, ct);
-
-            return Path.Combine(relDir, fileName).Replace("\\", "/");
+            // Lưu metadata kèm UploadedBy
+            return await AppendMetadataAsync(
+                physDir, relDir, fileName, file, subFolder, uploadedBy, now, ct);
         }
 
         //public async Task<string> UploadFileAsync(IFormFile file, string subFolder, CancellationToken ct)
@@ -119,9 +132,9 @@ namespace ERP_Portal_RC.Domain.Interfaces
             }
             return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
         }
-        private async Task AppendMetadataAsync(
+        private async Task<ContractFileMetadata> AppendMetadataAsync(
             string physDir, string relDir, string fileName,
-            IFormFile file, string oid, DateTime uploadedAt,
+            IFormFile file, string oid, string uploadedBy, DateTime uploadedAt,
             CancellationToken ct)
         {
             string metaPath = Path.Combine(physDir, "metadata.json");
@@ -134,7 +147,7 @@ namespace ERP_Portal_RC.Domain.Interfaces
             }
 
             string baseUrl = _configuration["FileUpload:BaseUrl"] ?? "";
-            list.Add(new ContractFileMetadata
+            var meta = new ContractFileMetadata
             {
                 Oid = oid,
                 FileName = fileName,
@@ -144,10 +157,14 @@ namespace ERP_Portal_RC.Domain.Interfaces
                 SizeBytes = file.Length,
                 Extension = Path.GetExtension(file.FileName).ToLowerInvariant(),
                 UploadedAt = uploadedAt,
-            });
+                UploadedBy = uploadedBy ?? "",
+            };
+            list.Add(meta);
 
             await File.WriteAllTextAsync(metaPath,
                 JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }), ct);
+
+            return meta;
         }
 
         public async Task<string> RebuildMetadata(string oid, int year, int month, CancellationToken ct = default)
@@ -213,18 +230,24 @@ namespace ERP_Portal_RC.Domain.Interfaces
             if (!Directory.Exists(uploadRoot)) return result;
 
             // Scan tất cả năm/tháng tìm folder khớp OID
+            // Hỗ trợ cả format cũ ({oid}) và format mới ({userCode}_{oid})
             foreach (var yearDir in Directory.GetDirectories(uploadRoot))
                 foreach (var monthDir in Directory.GetDirectories(yearDir))
-                {
-                    string oidDir = Path.Combine(monthDir, cleanOid);
-                    string metaPath = Path.Combine(oidDir, "metadata.json");
+                    foreach (var oidDir in Directory.GetDirectories(monthDir))
+                    {
+                        var folderName = Path.GetFileName(oidDir);
+                        // Khớp khi folder == cleanOid hoặc kết thúc bằng _cleanOid (format userCode_oid)
+                        bool match = folderName.Equals(cleanOid, StringComparison.OrdinalIgnoreCase)
+                                  || folderName.EndsWith("_" + cleanOid, StringComparison.OrdinalIgnoreCase);
+                        if (!match) continue;
 
-                    if (!File.Exists(metaPath)) continue;
+                        string metaPath = Path.Combine(oidDir, "metadata.json");
+                        if (!File.Exists(metaPath)) continue;
 
-                    var json = File.ReadAllText(metaPath);
-                    var list = JsonSerializer.Deserialize<List<ContractFileMetadata>>(json) ?? new();
-                    result.AddRange(list);
-                }
+                        var json = File.ReadAllText(metaPath);
+                        var list = JsonSerializer.Deserialize<List<ContractFileMetadata>>(json) ?? new();
+                        result.AddRange(list);
+                    }
 
             return result.OrderByDescending(f => f.UploadedAt).ToList();
         }
