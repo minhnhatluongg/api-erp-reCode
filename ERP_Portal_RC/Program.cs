@@ -13,6 +13,7 @@ using Interface.ReleaseInvoice.Repo;
 using Interface.ReleaseInvoice.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
@@ -20,6 +21,7 @@ using Microsoft.OpenApi.Models;
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -131,6 +133,31 @@ builder.Services.AddScoped<ISalesHierarchyRepository, SalesHierarchyRepository>(
 builder.Services.AddScoped<IDSignaturesRepository, DSignaturesRepository>();
 builder.Services.AddScoped<IEContractRepository, EContractRepository>();
 builder.Services.AddScoped<IEContractV26Repository, EContractV26Repository>();
+builder.Services.AddScoped<IWebhookRepository, WebhookRepository>();
+builder.Services.AddSingleton<WebhookFileLogger>();
+builder.Services.AddSingleton<IncomIntegrationFileLogger>();
+
+// ── Webhook Rate Limiting ────────────────────────────────────────────────────
+// Policy "webhook": 60 request/phút/IP, burst tối đa 10 đồng thời
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddSlidingWindowLimiter("webhook", limiterOptions =>
+    {
+        limiterOptions.PermitLimit           = 60;     // 60 req/phút
+        limiterOptions.Window                = TimeSpan.FromMinutes(1);
+        limiterOptions.SegmentsPerWindow     = 6;      // kiểm tra mỗi 10 giây
+        limiterOptions.QueueProcessingOrder  = QueueProcessingOrder.OldestFirst;
+        limiterOptions.QueueLimit            = 5;      // cho phép queue tối đa 5
+    });
+
+    options.OnRejected = async (context, _) =>
+    {
+        context.HttpContext.Response.StatusCode  = 429;
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            """{"success":false,"message":"Quá nhiều request. Vui lòng thử lại sau.","statusCode":429}""");
+    };
+});
 builder.Services.AddScoped<ITechnicalUserRepository, TechnicalUserRepository>();
 builder.Services.AddScoped<IRuleRepository,RuleRepository>();
 builder.Services.AddScoped<IXmlDataRepository, XmlDataRepository>();
@@ -311,6 +338,9 @@ if (!app.Environment.IsEnvironment("Docker") &&
 
 app.UseCors("AllowAll");
 
+
+// Webhook Rate Limiting
+app.UseRateLimiter();
 
 // Enable Authentication & Authorization
 app.UseAuthentication();

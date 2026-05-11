@@ -74,8 +74,26 @@ public class InvoiceService : IInvoiceService
             return FailInternal(error);
         }
 
-        // ── Bước 3: Mapping payload ───────────────────────────────────
-        var payload = BuildPayload(contractData, request.InvoiceType);
+        // ── Bước 3: Lấy email Sale để đưa vào BuyerEmail ─────────────
+        string? saleEmail = null;
+        try
+        {
+            var saleInfo = await _invoiceRepository.GetSaleInfoByInvRefAsync(contractOid);
+            saleEmail = saleInfo?.Email;
+
+            await _fileLogger.LogInfoAsync(contractOid,
+                "Lấy thông tin Sale.",
+                new { saleEmID = saleInfo?.SaleEmID, saleEmail, saleName = saleInfo?.FullName });
+        }
+        catch (Exception ex)
+        {
+            // Không block luồng chính nếu SP lỗi — dùng fallback CusEmail
+            await _fileLogger.LogWarnAsync(contractOid,
+                $"Không lấy được SaleInfo, fallback sang CusEmail: {ex.Message}");
+        }
+
+        // ── Bước 4: Mapping payload ───────────────────────────────────
+        var payload = BuildPayload(contractData, request.InvoiceType, saleEmail);
 
         await _fileLogger.LogInfoAsync(contractOid,
             "Mapping payload hoàn tất.",
@@ -217,7 +235,8 @@ public class InvoiceService : IInvoiceService
     /// </summary>
     private static WinInvoiceCreateRequest BuildPayload(
         EContractData data,
-        InvoiceType invoiceType)
+        InvoiceType invoiceType,
+        string? saleEmail = null)
     {
         var contract = data.EContracts!;
         var details = data.EContractDetails!;
@@ -295,7 +314,8 @@ public class InvoiceService : IInvoiceService
             BuyerCompany = contract.CusName,
             BuyerTax = contract.CusTax,
             BuyerAddress = contract.CusAddress,
-            BuyerEmail = contract.CusEmail,
+            // Ưu tiên email Sale (từ GetSaleInfo_ByInvRef), fallback về CusEmail của KH
+            BuyerEmail = !string.IsNullOrWhiteSpace(saleEmail) ? saleEmail : contract.CusEmail,
             BuyerPhone = contract.CusTel,
             BuyerAcc = contract.CusBankNumber,
             BuyerBank = contract.CusBankAddress,
