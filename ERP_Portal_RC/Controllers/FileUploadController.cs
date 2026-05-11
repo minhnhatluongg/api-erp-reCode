@@ -36,22 +36,34 @@ namespace API.ERP_Portal_RC.Controllers
             _logger = logger;
         }
 
+        /// <summary>
+        /// Upload file đính kèm vào hợp đồng.
+        /// Yêu cầu đăng nhập (JWT). UserCode được lấy từ token để gắn vào metadata,
+        /// đảm bảo user chỉ tải file vào hợp đồng của mình.
+        /// </summary>
         [HttpPost("upload")]
+        [Authorize]
         [DisableRequestSizeLimit]
-        [ProducesResponseType(typeof(ApiResponse<List<string>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiResponse<List<ContractFileMetadata>>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Upload(
             IFormFileCollection files,
             [FromQuery] string oid,
             CancellationToken ct)
         {
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrWhiteSpace(userCode))
+                return Unauthorized(ApiResponse<object>.ErrorResponse(
+                    "Không xác định được UserCode từ token.", 401));
+
             if (string.IsNullOrEmpty(oid))
                 return BadRequest(ApiResponse<object>.ErrorResponse("Thiếu OID."));
 
             if (files is null || files.Count == 0)
                 return BadRequest(ApiResponse<object>.ErrorResponse("Không có file nào."));
 
-            var fileLinks = new List<string>();
+            var uploaded = new List<ContractFileMetadata>();
             var errors = new List<string>();
 
             foreach (var file in files)
@@ -71,19 +83,25 @@ namespace API.ERP_Portal_RC.Controllers
                     continue;
                 }
 
-                string relativePath = await _storage.UploadFileAsync(file, oid, ct);
-                fileLinks.Add(BuildUrl(relativePath));
+                var meta = await _storage.UploadFileAsync(file, oid, userCode, ct);
+                if (meta != null)
+                {
+                    uploaded.Add(meta);
+                    _logger.LogInformation(
+                        "[Upload] User={U} OID={O} File={F} Size={S}",
+                        userCode, oid, meta.OriginalName, meta.SizeBytes);
+                }
             }
 
-            if (errors.Count > 0 && fileLinks.Count == 0)
-                return BadRequest(ApiResponse<List<string>>.ErrorResponse(
+            if (errors.Count > 0 && uploaded.Count == 0)
+                return BadRequest(ApiResponse<List<ContractFileMetadata>>.ErrorResponse(
                     string.Join("; ", errors), statusCode: 400, errors: errors));
 
             string message = errors.Count > 0
-                ? $"Upload một phần thành công. Lỗi: {string.Join("; ", errors)}"
-                : "Upload thành công.";
+                ? $"Upload một phần thành công ({uploaded.Count}). Lỗi: {string.Join("; ", errors)}"
+                : $"Upload thành công {uploaded.Count} file.";
 
-            return Ok(ApiResponse<List<string>>.SuccessResponse(fileLinks, message));
+            return Ok(ApiResponse<List<ContractFileMetadata>>.SuccessResponse(uploaded, message));
         }
 
         // ── Endpoint 2: Upload từng chunk ──────────────────────────────────────
@@ -92,6 +110,7 @@ namespace API.ERP_Portal_RC.Controllers
         /// Required headers: X-Session-Id, X-Chunk-Index, X-Total-Chunks, X-File-Name
         /// </summary>
         [HttpPost("upload-chunk")]
+        [Authorize]
         [DisableRequestSizeLimit]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
@@ -120,6 +139,7 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         [HttpPost("merge-chunks")]
+        [Authorize]
         [ProducesResponseType(typeof(ApiResponse<string>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> MergeChunks(
@@ -307,6 +327,132 @@ namespace API.ERP_Portal_RC.Controllers
             return Ok(ApiResponse<ContractAllFilesResponse>.SuccessResponse(
                 response,
                 $"User {userCode}: {response.TotalAttachments} file đính kèm, {response.TotalTemplates} file mẫu."));
+        }
+
+        // ── API: User xem TỔNG QUAN file đã upload (dashboard) ────────────────
+        /// <summary>
+        /// Lấy báo cáo tổng hợp về toàn bộ file user đang đăng nhập đã upload:
+        ///   - Tổng số file, tổng dung lượng
+        ///   - Số hợp đồng có file
+        ///   - Group theo hợp đồng (OID), theo extension, theo tháng
+        ///   - 10 file upload gần nhất
+        /// UserCode lấy từ JWT token. Có thể filter theo năm (year).
+        /// </summary>
+        [HttpGet("my-files/summary")]
+        [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<UserFilesSummaryResponse>), StatusCodes.Status200OK)]
+        public IActionResult GetMyFilesSummary([FromQuery] int? year = null)
+        {
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrWhiteSpace(userCode))
+                return Unauthorized(ApiResponse<object>.ErrorResponse(
+                    "Không xác định được UserCode từ token.", 401));
+
+            string uploadRoot = _configuration["FileUpload:PhysicalRootPath"]
+                              ?? "D:\\IIS WEB\\api-erprc.win-tech.vn\\wwwroot\\Attachments";
+
+            var allFiles = new List<ContractFileMetadata>();
+
+            if (Directory.Exists(uploadRoot))
+            {
+                var yearDirs = Directory.GetDirectories(uploadRoot);
+                if (year.HasValue)
+                    yearDirs = yearDirs
+                        .Where(d => Path.GetFileName(d) == year.Value.ToString())
+                        .ToArray();
+
+                foreach (var yearDir in yearDirs)
+                    foreach (var monthDir in Directory.GetDirectories(yearDir))
+                        foreach (var oidDir in Directory.GetDirectories(monthDir))
+                        {
+                            var folderName = Path.GetFileName(oidDir);
+                            if (!folderName.StartsWith(userCode + "_",
+                                StringComparison.OrdinalIgnoreCase)) continue;
+
+                            var metaPath = Path.Combine(oidDir, "metadata.json");
+                            if (!System.IO.File.Exists(metaPath)) continue;
+
+                            try
+                            {
+                                var list = JsonSerializer.Deserialize<List<ContractFileMetadata>>(
+                                    System.IO.File.ReadAllText(metaPath)) ?? new();
+                                allFiles.AddRange(list);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex,
+                                    "[Summary] Lỗi đọc metadata {Path}", metaPath);
+                            }
+                        }
+            }
+
+            // ── Build response ────────────────────────────────────────────
+            var response = new UserFilesSummaryResponse
+            {
+                UserCode       = userCode,
+                TotalFiles     = allFiles.Count,
+                TotalSizeBytes = allFiles.Sum(f => f.SizeBytes),
+            };
+
+            response.TotalSizeFormatted = FormatBytes(response.TotalSizeBytes);
+
+            response.ByContract = allFiles
+                .GroupBy(f => f.Oid)
+                .Select(g => new ContractGroup
+                {
+                    Oid            = g.Key,
+                    FileCount      = g.Count(),
+                    SizeBytes      = g.Sum(f => f.SizeBytes),
+                    LastUploadedAt = g.Max(f => f.UploadedAt),
+                })
+                .OrderByDescending(c => c.LastUploadedAt)
+                .ToList();
+
+            response.TotalContracts = response.ByContract.Count;
+
+            response.ByExtension = allFiles
+                .GroupBy(f => string.IsNullOrEmpty(f.Extension) ? "(no-ext)" : f.Extension.ToLowerInvariant())
+                .Select(g => new ExtensionGroup
+                {
+                    Extension = g.Key,
+                    FileCount = g.Count(),
+                    SizeBytes = g.Sum(f => f.SizeBytes),
+                })
+                .OrderByDescending(e => e.FileCount)
+                .ToList();
+
+            response.ByMonth = allFiles
+                .GroupBy(f => f.UploadedAt.ToString("yyyy-MM"))
+                .Select(g => new MonthGroup
+                {
+                    Month     = g.Key,
+                    FileCount = g.Count(),
+                    SizeBytes = g.Sum(f => f.SizeBytes),
+                })
+                .OrderByDescending(m => m.Month)
+                .ToList();
+
+            response.RecentFiles = allFiles
+                .OrderByDescending(f => f.UploadedAt)
+                .Take(10)
+                .ToList();
+
+            return Ok(ApiResponse<UserFilesSummaryResponse>.SuccessResponse(
+                response,
+                $"User {userCode}: {response.TotalFiles} file, {response.TotalContracts} hợp đồng, {response.TotalSizeFormatted}."));
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            string[] units = { "B", "KB", "MB", "GB", "TB" };
+            double size = bytes;
+            int unit = 0;
+            while (size >= 1024 && unit < units.Length - 1)
+            {
+                size /= 1024;
+                unit++;
+            }
+            return $"{size:0.##} {units[unit]}";
         }
 
         // ── API 1: User xem file đính kèm hợp đồng ────────────────────────────
