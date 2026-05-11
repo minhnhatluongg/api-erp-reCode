@@ -136,6 +136,7 @@ builder.Services.AddScoped<IEContractV26Repository, EContractV26Repository>();
 builder.Services.AddScoped<IWebhookRepository, WebhookRepository>();
 builder.Services.AddSingleton<WebhookFileLogger>();
 builder.Services.AddSingleton<IncomIntegrationFileLogger>();
+builder.Services.AddSingleton<ContractSignFileLogger>();
 
 // ── Webhook Rate Limiting ────────────────────────────────────────────────────
 // Policy "webhook": 60 request/phút/IP, burst tối đa 10 đồng thời

@@ -332,14 +332,23 @@ namespace ERP_Portal_RC.Application.Services
                 if (!DateTime.TryParse(data["OrderDate"]?.ToString(), out DateTime orderDate))
                     orderDate = DateTime.Now;
 
+                // signDate = ngày ký thực tế (hiển thị "Ký ngày:" trên PDF)
+                // Khác với orderDate = ngày tạo hợp đồng
+                var signDate = DateTime.Now;
+
                 var c = data["CompanyInfo"];
                 decimal totalAmount = data["TotalAmount"]?.Value<decimal>() ?? 0;
 
                 string finalXml = xmlTemplate
                     .Replace("{order_code}",            oid ?? data["OrderCode"]?.ToString() ?? "ĐANG TẠO")
+                    // Ngày tạo hợp đồng
                     .Replace("{order_date_day}",         orderDate.Day.ToString("00"))
                     .Replace("{order_date_month}",       orderDate.Month.ToString("00"))
                     .Replace("{order_date_year}",        orderDate.Year.ToString())
+                    // Ngày ký thực tế — dùng cho chỗ "Ký ngày:" trong template
+                    .Replace("{sign_date_day}",          signDate.Day.ToString("00"))
+                    .Replace("{sign_date_month}",        signDate.Month.ToString("00"))
+                    .Replace("{sign_date_year}",         signDate.Year.ToString())
                     .Replace("{partner_name}",           Escape(data["PartnerName"]?.ToString()))
                     .Replace("{partner_vat}",            data["PartnerVAT"]?.ToString()          ?? "")
                     .Replace("{partner_address}",        Escape(data["PartnerAddress"]?.ToString()))
@@ -396,11 +405,15 @@ namespace ERP_Portal_RC.Application.Services
             {
                 return ApiResponse<object>.ErrorResponse("Hợp đồng này đã được lưu trên hệ thống trước đó.", 400);
             }
+            // SignDate = ngày ký thực tế → hiển thị "Ký ngày" trên PDF
+            // FE không truyền → fallback DateTime.Now
+            var signDate = request.SignDate ?? DateTime.Now;
+
             bool isSaved = await _signRepo.SaveSignedXmlAsync(
                 oid:             request.OID,
                 signedXmlBase64: request.SignedXmlBase64,
-                orderDate:       request.OrderDate,
-                partnerSoCCCD: request.PartnerSoCCCD ?? "NO_CCCD", 
+                orderDate:       signDate,          // ← ngày ký, không phải ODate tạo HĐ
+                partnerSoCCCD:   request.PartnerSoCCCD ?? "NO_CCCD",
                 partnerVat:      request.PartnerVat,
                 partnerName:     request.PartnerName,
                 companyTax:      request.CompanyTax,

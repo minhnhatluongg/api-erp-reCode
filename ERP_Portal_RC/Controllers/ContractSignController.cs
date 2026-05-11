@@ -2,6 +2,7 @@ using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Application.Services;
 using ERP_Portal_RC.Domain.Common;
+using ERP_Portal_RC.Domain.Common.Logging;
 using ERP_Portal_RC.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,11 +21,15 @@ namespace API.ERP_Portal_RC.Controllers
     [ApiController]
     public class ContractSignController : ControllerBase
     {
-        private readonly IContractSignService _signService;
+        private readonly IContractSignService  _signService;
+        private readonly ContractSignFileLogger _fileLogger;
 
-        public ContractSignController(IContractSignService signService)
+        public ContractSignController(
+            IContractSignService signService,
+            ContractSignFileLogger fileLogger)
         {
             _signService = signService;
+            _fileLogger  = fileLogger;
         }
 
         #region Main Sign Contract APIs
@@ -261,12 +266,39 @@ namespace API.ERP_Portal_RC.Controllers
         [HttpPost("save-signed-xml")]
         public async Task<IActionResult> SaveSignedXml([FromBody] SaveSignedXmlRequest request)
         {
+            var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var userCode = User.FindFirst("UserCode")?.Value ?? "unknown";
+            var oid      = request?.OID ?? "unknown";
+
             if (request == null || string.IsNullOrEmpty(request.SignedXmlBase64))
             {
+                await _fileLogger.LogInboundAsync(oid, "save-signed-xml", "INVALID",
+                    clientIp, message: "SignedXmlBase64 rỗng hoặc request null");
                 return BadRequest(ApiResponse<object>.ErrorResponse("Dữ liệu ký không hợp lệ", 400));
             }
 
+            // Log REQUEST — không log SignedXmlBase64 (quá dài), chỉ log metadata
+            await _fileLogger.LogInboundAsync(oid, "save-signed-xml", "RECEIVED",
+                clientIp,
+                payload: new
+                {
+                    OID          = request.OID,
+                    PartnerVat   = request.PartnerVat,
+                    PartnerName  = request.PartnerName,
+                    CompanyTax   = request.CompanyTax,
+                    OrderDate    = request.OrderDate,
+                    SignDate      = request.SignDate,
+                    XmlLength    = request.SignedXmlBase64?.Length ?? 0,
+                    CrtUser      = userCode
+                });
+
             var result = await _signService.SaveContractAfterSigningAsync(request);
+
+            // Log RESPONSE
+            string status = result.StatusCode == 200 ? "SUCCESS" : "FAILED";
+            await _fileLogger.LogInboundAsync(oid, "save-signed-xml", status,
+                clientIp, message: $"HTTP {result.StatusCode} — {result.Message}");
+
             return StatusCode(result.StatusCode, result);
         }
 

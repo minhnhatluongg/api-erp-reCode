@@ -36,10 +36,16 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         /// <summary>
-        /// Nhận callback khi hóa đơn điện tử đã xuất thành công.
-        /// Cập nhật SignNumb = 301 cho JOB_00005/JB:010.
+        /// <summary>
+        /// App đẩy hóa đơn đã xuất thành công → tự động hoàn thành toàn bộ luồng.
         ///
-        /// Header yêu cầu: X-Internal-Key: {key}
+        /// Logic tự động (không cần gọi request-invoice trước):
+        ///   - Chưa có job        → tạo job + 0→101 + 101→301
+        ///   - SignNumb = 0       → 0→101 → 101→301
+        ///   - SignNumb = 101     → 101→301 trực tiếp
+        ///   - SignNumb = 301     → idempotent, trả 200
+        ///
+        /// Header: X-Internal-Key: {key}
         /// </summary>
         [HttpPost("invoice-exported")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
@@ -82,7 +88,7 @@ namespace API.ERP_Portal_RC.Controllers
             (bool success, string message) result;
             try
             {
-                result = await _repo.AdvanceInvoiceExportedAsync(oid, userId: "WEBHOOK");
+                result = await _repo.AdvanceInvoiceExportedFullAsync(oid, userId: "WEBHOOK");
             }
             catch (Exception ex)
             {
