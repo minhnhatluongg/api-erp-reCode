@@ -8,5 +8,7 @@
         public string? FullName { get; set; }
         public string? appvMess { get; set; }
         public string? cancelDescript { get; set; }
+        public string? excHost { get; set; }
+        public DateTime Crt_Date { get; set; }
     }
 }

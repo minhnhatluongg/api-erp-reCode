@@ -53,9 +53,28 @@ Logs/
 *.log
 
 # Deploy scripts (chứa IP/path nội bộ)
+Deploy/
 deploy.bat
 deploy-remote.ps1
 _publish_output/
 Scripts/
 *.sql
 docs
+*.bat
+*.ps1
+
+## ============================================================
+## User upload data — TUYỆT ĐỐI KHÔNG commit
+## Đây là dữ liệu user trên server. Nếu lọt vào source code rồi
+## publish ra, deploy script có thể ghi đè/xoá folder thật trên server.
+## ============================================================
+ERP_Portal_RC/wwwroot/Uploads/
+ERP_Portal_RC/wwwroot/Attachments/
+ERP_Portal_RC/wwwroot/KyThuatMau/
+wwwroot/Uploads/
+wwwroot/Attachments/
+wwwroot/KyThuatMau/
+
+## Deploy artifacts
+deploy/_publish/
+deploy/artifacts/

@@ -11,7 +11,8 @@ using System.Security.Claims;
 namespace API.ERP_Portal_RC.Controllers
 {
 	[Authorize]
-	[Route("api/[controller]")]
+    [AllowAnonymous]
+    [Route("api/[controller]")]
 	[ApiController]
 	public class RptUsedController : Controller
 	{
@@ -48,6 +49,7 @@ namespace API.ERP_Portal_RC.Controllers
 		/// </summary>
 		/// <param name="request"></param>
 		/// <returns></returns>
+		[AllowAnonymous]
 		[HttpGet("low-remaining-inv")]
 		public async Task<ActionResult<ApiResponse<object>>> INVPeriod(
 			[FromQuery] RptPageRequest request)
@@ -69,6 +71,8 @@ namespace API.ERP_Portal_RC.Controllers
 		/// </summary>
 		/// <param name="request"></param>
 		/// <returns></returns>
+		/// 
+		[AllowAnonymous]
 		[HttpGet("tvan-expire")]
 		public async Task<ActionResult<ApiResponse<object>>> TVANPeriod(
 			[FromQuery] RptPageRequest request)
