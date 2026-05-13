@@ -59,8 +59,9 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<(bool Success, string Message, object Data)> RutTrinhKyAsync(UnSignRequest model, string correlationId);
         //Nghiệp vụ lịch sử Job 
         Task<EContractHistoryRaw> GetFullHistoryDataAsync(string oid);
-        // Check job có yêu cầu kiểm tra của kd/sales chưa?
         Task<List<JobEntity>> GetJobKTbyOID(string oid);
+        /// <summary>Lấy trạng thái tất cả Job — phân loại done/waiting/returned/pending.</summary>
+        Task<List<JobStatusItem>> GetJobStatusAsync(string oid);
         //Task<EContractsViewModel> GetByOIDJobKT(string OID = "", string KT = "");
         Task<List<EContractDetails>> GetEContractDetailsNewAsync(string oid);
         //Get job 

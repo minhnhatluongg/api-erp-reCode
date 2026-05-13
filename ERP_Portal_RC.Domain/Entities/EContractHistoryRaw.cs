@@ -9,7 +9,11 @@ namespace ERP_Portal_RC.Domain.Entities
 {
     public class EContractHistoryRaw
     {
-        public List<HistoryListEntity>? History { get; set; }
-        public List<JobEntity>? Jobs { get; set; }
+        /// <summary>Lịch sử ký hợp đồng từ zsgn_webContracts.</summary>
+        public List<HistoryListEntity>?      History     { get; set; }
+        /// <summary>Lịch sử duyệt Job từ zsgn_EContractJobs.</summary>
+        public List<JobHistoryEntity>?       JobHistory  { get; set; }
+        /// <summary>Tracking chỉnh sửa: gỡ ký / edit / gửi lại.</summary>
+        public List<ContractTrackingEntity>? Tracking    { get; set; }
     }
 }

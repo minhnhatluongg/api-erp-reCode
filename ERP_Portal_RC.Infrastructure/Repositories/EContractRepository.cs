@@ -596,8 +596,28 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             // 3. Add tham số Table Details
             parameters.Add("@Details", detailsTable.AsTableValuedParameter("dbo.EContractDetailType"));
 
-            // Thực thi
             await conn.ExecuteAsync("dbo.sp_EContract_InsertAll_new", parameters, commandType: CommandType.StoredProcedure);
+
+            // Ghi tracking RESUBMIT nếu hợp đồng đã từng bị gỡ ký (có UNSIGN record)
+            try
+            {
+                using var connEvat = _dbConnectionFactory.GetConnection("BosControlEVAT");
+                bool hadUnsign = await connEvat.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(1) FROM dbo.ECtr_ContractTrackingLog WHERE ContractOID = @OID AND ActionType = 'UNSIGN'",
+                    new { OID = master.OID }) > 0;
+
+                if (hadUnsign)
+                {
+                    await connEvat.ExecuteAsync(@"
+                        INSERT INTO dbo.ECtr_ContractTrackingLog
+                            (ContractOID, ActionType, ActionBy, ActionByName, ActionDate, Notes)
+                        VALUES
+                            (@OID, 'RESUBMIT', @CrtUser, NULL, GETDATE(), N'Gửi duyệt lại sau chỉnh sửa')",
+                        new { OID = master.OID, CrtUser = master.Crt_User });
+                }
+            }
+            catch { /* Tracking không block luồng chính */ }
+
             return master.OID;
         }
 
@@ -720,6 +740,19 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 p,
                 commandType: CommandType.StoredProcedure,
                 commandTimeout: 60);
+
+            // Ghi tracking EDIT (không ném lỗi nếu tracking thất bại)
+            try
+            {
+                using var connEvat = _dbConnectionFactory.GetConnection("BosControlEVAT");
+                await connEvat.ExecuteAsync(@"
+                    INSERT INTO dbo.ECtr_ContractTrackingLog
+                        (ContractOID, ActionType, ActionBy, ActionByName, ActionDate, Notes)
+                    VALUES
+                        (@OID, 'EDIT', @ChgeUser, NULL, GETDATE(), N'Chỉnh sửa nội dung hợp đồng')",
+                    new { OID = master.OID, ChgeUser = master.ChgeUser ?? master.Crt_User });
+            }
+            catch { /* Tracking không block luồng chính */ }
 
             return master.OID;
         }
@@ -885,6 +918,14 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     return (false, $"Không thể gỡ ký vì hóa đơn đã được xuất (Hệ thống tìm thấy bước SignNumb 201 cho nghiệp vụ JB:010).", null);
                 }
 
+                // 2b. Lấy SignNumb hiện tại để lưu vào tracking
+                int prevSignNumb = await con.ExecuteScalarAsync<int>(
+                    @"SELECT TOP 1 ISNULL(SignNumb, 0)
+                      FROM BosApproval.dbo.zsgn_webContracts WITH (NOLOCK)
+                      WHERE OID = @OID AND FactorID = 'EContract'
+                      ORDER BY currSignDate DESC",
+                    new { model.OID }, trans);
+
                 // 3. Thực hiện gỡ ký - Xóa thông tin trình ký tại zsgn_webContracts
                 int delZsgnWeb = await con.ExecuteAsync(
                     "DELETE FROM BosApproval.dbo.zsgn_webContracts WHERE OID = @OID",
@@ -904,9 +945,9 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 string status = (delZsgnWeb > 0 || delPublic > 0) ? "DELETED" : "NO_ACTION";
                 string msg = $"Kết quả: {delZsgnWeb} dòng web, {delPublic} dòng Public đã xử lý.";
 
-                // 6. Ghi Log Unsign
+                // 6. Ghi Log Unsign + Tracking
                 await con.ExecuteAsync(@"
-                    INSERT INTO BosControlEVAT.dbo.ECtr_UnsignLogs 
+                    INSERT INTO BosControlEVAT.dbo.ECtr_UnsignLogs
                     (OID, CorrelationId, Reason, RequestedBy, FullName, [Role], ActionStatus, ActionMessage)
                     VALUES (@OID, @CorrelationId, @Reason, @RequestedBy, @FullName, @Role, @status, @msg)",
                     new
@@ -919,6 +960,25 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                         model.Role,
                         status,
                         msg
+                    }, trans);
+
+                // 7. Ghi tracking UNSIGN
+                await con.ExecuteAsync(@"
+                    INSERT INTO BosControlEVAT.dbo.ECtr_ContractTrackingLog
+                        (ContractOID, ActionType, ActionBy, ActionByName, [Role],
+                         ActionDate, Reason, CorrelationId, PrevSignNumb)
+                    VALUES
+                        (@ContractOID, 'UNSIGN', @ActionBy, @ActionByName, @Role,
+                         GETDATE(), @Reason, @CorrelationId, @PrevSignNumb)",
+                    new
+                    {
+                        ContractOID   = model.OID,
+                        ActionBy      = model.RequestedBy,
+                        ActionByName  = model.FullName,
+                        Role          = model.Role,
+                        Reason        = model.Reason,
+                        CorrelationId = correlationId,
+                        PrevSignNumb  = prevSignNumb
                     }, trans);
 
                 trans.Commit();
@@ -1018,22 +1078,36 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
         public async Task<EContractHistoryRaw> GetFullHistoryDataAsync(string oid)
         {
-            using var conn = _dbConnectionFactory.GetConnection("BosOnline");
+            using var conn = _dbConnectionFactory.GetConnection("BosApproval");
             var raw = new EContractHistoryRaw();
-            string cleanOid = oid.Replace("%2F", "/").Replace("%2f", "/");
-            cleanOid = System.Net.WebUtility.UrlDecode(cleanOid);
-            using (var multi = await conn.QueryMultipleAsync("wspGet_EContracts_ByID_History", new { OID = cleanOid }, commandType: CommandType.StoredProcedure))
-            {
-                raw.History = (await multi.ReadAsync<HistoryListEntity>()).ToList();
-            }
 
-            using (var multiJob = await conn.QueryMultipleAsync("wspGet_EContracts_ByID_DS", new { OID = cleanOid }, commandType: CommandType.StoredProcedure))
-            {
-                multiJob.Read<dynamic>();
-                raw.Jobs = (await multiJob.ReadAsync<JobEntity>()).ToList();
-            }
+            string cleanOid = System.Net.WebUtility.UrlDecode(
+                oid.Replace("%2F", "/").Replace("%2f", "/"));
+
+            // 1 SP, 2 resultsets:
+            //   RS1 → historyList (zsgn_webContracts)
+            //   RS2 → jobHistory  (zsgn_EContractJobs)
+            using var multi = await conn.QueryMultipleAsync(
+                "BosOnline.dbo.wspGet_EContract_FullHistory",
+                new { OID = cleanOid },
+                commandType: CommandType.StoredProcedure);
+
+            raw.History    = (await multi.ReadAsync<HistoryListEntity>()).ToList();      // RS1
+            raw.JobHistory = (await multi.ReadAsync<JobHistoryEntity>()).ToList();       // RS2
+            raw.Tracking   = (await multi.ReadAsync<ContractTrackingEntity>()).ToList(); // RS3
 
             return raw;
+        }
+
+        public async Task<List<JobStatusItem>> GetJobStatusAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            var result = await conn.QueryAsync<JobStatusItem>(
+                "dbo.GetJobStatusByOID",
+                new { OID = oid },
+                commandType: CommandType.StoredProcedure,
+                commandTimeout: 30);
+            return result.ToList();
         }
 
         public async Task<List<JobEntity>> GetJobKTbyOID(string oid)
@@ -2138,8 +2212,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@Page", page);
             parameters.Add("@PageSize", pageSize);
 
+            //wspList_EContracts_PagedV26ASM_FIX
+            //wspList_EContracts_PagedV26ASM
             using var multi = await conn.QueryMultipleAsync(
-                "wspList_EContracts_PagedV26ASM",
+                "wspList_EContracts_PagedV26ASM_FIX",
                 parameters,
                 commandType: CommandType.StoredProcedure,
                 commandTimeout: 120);

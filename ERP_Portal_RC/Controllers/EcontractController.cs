@@ -477,6 +477,28 @@ namespace API.ERP_Portal_RC.Controllers
         /// </summary>
         /// <param name="OID"></param>
         /// <returns></returns>
+        /// <summary>
+        /// Lấy trạng thái tất cả Job của hợp đồng — phân loại rõ ràng.
+        /// Response: { jobDone, jobWaiting, jobReturned, jobPending }
+        /// </summary>
+        /// <summary>
+        /// Lấy trạng thái tất cả Job của hợp đồng.
+        /// Phân loại: jobDone | jobWaiting | jobReturned | jobPending
+        /// OID encode: dấu / → %2F
+        /// </summary>
+        [HttpGet("job-status")]
+        public async Task<IActionResult> GetJobStatus([FromQuery] string oid)
+        {
+            if (string.IsNullOrWhiteSpace(oid))
+                return BadRequest(ApiResponse<object>.ErrorResponse("OID không được để trống."));
+
+            var result = await _econtractService.GetJobStatusAsync(oid);
+            return result.Success
+                ? Ok(result)
+                : StatusCode(result.StatusCode, result);
+        }
+
+        [ApiExplorerSettings(IgnoreApi = true)]
         [HttpGet("getjobKT")]
         public async Task<IActionResult> GetJobKT(string OID)
         {

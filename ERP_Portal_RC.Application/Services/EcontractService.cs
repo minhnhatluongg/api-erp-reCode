@@ -805,114 +805,141 @@ namespace ERP_Portal_RC.Application.Services
 
             var response = new EContractHistoryResponse();
 
-            var historyList = raw.History.OrderBy(s => s.currSignDate).Select(h => new HistoryItemDTO
+            var historyList = raw.History.OrderBy(s => s.Crt_Date).Select(h => new HistoryItemDTO
             {
                 OID = h.OID,
                 CurrSignNum = h.currSignNum,
                 AppvMess = h.appvMess,
                 FullName = h.FullName,
-                CurrSignDate = h.currSignDate,
-                CancelDescript = "" 
+                Crt_Date = h.Crt_Date,
+                ExcHost = h.excHost,
             }).ToList();
 
             foreach (var item in historyList)
             {
+                // CurrSignNum = số gốc từ DB (101, 301...)
+                // Status      = text mô tả hiển thị cho FE
                 switch (item.CurrSignNum)
                 {
                     case StatusSignnum.TRINH_KY:
                         if (string.IsNullOrEmpty(item.AppvMess))
                         {
-                            item.CurrSignNum = "Tạo mới hợp đồng";
+                            item.Status   = "Tạo mới hợp đồng";
                             item.AppvMess = "OK";
                         }
                         else
                         {
-                            item.CurrSignNum = "Hợp đồng trả về";
+                            item.Status   = "Hợp đồng trả về";
                             item.AppvMess = "Lý do: " + item.AppvMess;
                         }
                         break;
                     case StatusSignnum.CHO_KIEM_TRA:
-                        item.CurrSignNum = "Đề xuất ký";
+                        item.Status   = "Đề xuất ký";
                         item.AppvMess = "Trình ký";
                         break;
                     case StatusSignnum.CHO_GD_DUYEN:
-                        item.CurrSignNum = "Trình ký Giám đốc";
-                        item.FullName = "Hợp đồng trình ký giám đốc";
+                        item.Status   = "Trình ký Giám đốc";
                         item.AppvMess = "Trình ký";
                         break;
                     case StatusSignnum.HD_DA_DUYET:
-                        item.CurrSignNum = "Hợp đồng đã ký";
-                        item.FullName = "Hợp đồng đã ký";
+                        item.Status   = "Hợp đồng đã ký";
                         item.AppvMess = "OK";
                         break;
                     case StatusSignnum.KH_DA_KY:
-                        item.CurrSignNum = "Hợp đồng đã được khách hàng ký";
+                        item.Status   = "Hợp đồng đã được khách hàng ký";
                         item.FullName = "Khách hàng";
                         item.AppvMess = "OK";
                         break;
                     case StatusSignnum.HD_DONG:
-                        item.CurrSignNum = "Đóng hợp đồng";
+                        item.Status   = "Đóng hợp đồng";
                         item.AppvMess = "OK";
                         break;
                     case StatusSignnum.TRA_VE:
-                        item.CurrSignNum = "Hợp đồng bị trả về";
+                        item.Status   = "Hợp đồng bị trả về";
                         item.AppvMess = "Lý do: " + item.AppvMess;
+                        break;
+                    default:
+                        item.Status = item.AppvMess;
                         break;
                 }
             }
 
-            if (raw.Jobs != null && raw.Jobs.Any())
+            // Map JobHistory từ zsgn_EContractJobs → JobList
+            if (raw.JobHistory != null && raw.JobHistory.Any())
             {
-                response.JobList = raw.Jobs.Where(j =>
-                    j.currSignNumb != (int)CurrSignNum.TRA_VE &&
-                    j.currSignNumb != (int)CurrSignNum.TRA_VE200 &&
-                    j.currSignNumb != (int)CurrSignNum.TRA_VE300
-                ).ToList();
-
-                foreach (var job in raw.Jobs)
-                {
-                    if (job.currSignNumb == (int)CurrSignNum.TRA_VE ||
-                        job.currSignNumb == (int)CurrSignNum.TRA_VE200 ||
-                        job.currSignNumb == (int)CurrSignNum.TRA_VE300)
-                        continue;
-
-                    var targetHistory = historyList.FirstOrDefault(h => h.OID == job.OID);
-
-                    if (targetHistory != null)
+                response.JobList = raw.JobHistory
+                    .Select(j => new JobHistoryItemDTO
                     {
-                        string jobNote = "";
-                        if (job.FactorID == JobFactor.JOB_00004.ToString() && job.EntryID == JobEntry.JB008)
-                        {
-                            jobNote = !string.IsNullOrEmpty(job.DescriptChange)
-                                ? $"Lý do : {job.Reason} - {job.DescriptChange}"
-                                : $"Lý do : {job.Reason}";
-                        }
-                        else if (job.FactorID == JobFactor.JOB_00005.ToString() && !string.IsNullOrEmpty(job.DescriptChange))
-                        {
-                            jobNote = "Ghi chú bổ sung : " + job.DescriptChange;
-                        }
-
-                        if (!string.IsNullOrEmpty(jobNote))
-                        {
-                            if (string.IsNullOrEmpty(targetHistory.CancelDescript))
-                                targetHistory.CancelDescript = jobNote;
-                            else
-                                targetHistory.CancelDescript += " | " + jobNote;
-                        }
-                    }
-                }
+                        JobOID      = j.JobOID,
+                        ContractOID = j.ContractOID,
+                        FactorID    = j.FactorID,
+                        EntryID     = j.EntryID,
+                        EntryName   = j.EntryName,
+                        SignNumb    = j.SignNumb,
+                        SignStatus  = j.SignStatus,
+                        SignDate    = j.SignDate,
+                        Crt_Date    = j.Crt_Date,
+                        FullName    = j.FullName,
+                        AppvMess    = j.AppvMess,
+                    })
+                    .ToList();
             }
+
             response.HistoryList = historyList;
+
+            // Map TrackingList (gỡ ký / chỉnh sửa / gửi lại)
+            if (raw.Tracking != null && raw.Tracking.Any())
+            {
+                response.TrackingList = raw.Tracking.Select(t => new TrackingItemDTO
+                {
+                    Id           = t.Id,
+                    ActionType   = t.ActionType,
+                    ActionLabel  = t.ActionLabel,
+                    ActionByName = t.ActionByName,
+                    Role         = t.Role,
+                    ActionDate   = t.ActionDate,
+                    Reason       = t.Reason,
+                    PrevSignNumb = t.PrevSignNumb,
+                }).ToList();
+            }
+
             return ApiResponse<EContractHistoryResponse>.SuccessResponse(response, "Lấy lịch sử thành công.");
         }
 
         public async Task<List<JobEntity>> GetJobKTbyOID(string oid)
         {
             if (string.IsNullOrEmpty(oid)) return new List<JobEntity>();
-
             var data = await _eContractRepository.GetJobKTbyOID(oid);
-
             return data.OrderByDescending(x => x.crt_date).ToList();
+        }
+
+        /// <summary>
+        /// Lấy trạng thái tất cả Job của hợp đồng.
+        /// Phân loại: JobDone | JobWaiting | JobReturned | JobPending.
+        /// </summary>
+        public async Task<ApiResponse<ContractJobStatusResponse>> GetJobStatusAsync(string oid)
+        {
+            if (string.IsNullOrEmpty(oid))
+                return ApiResponse<ContractJobStatusResponse>.ErrorResponse("OID không được để trống.", 400);
+
+            string cleanOid = System.Net.WebUtility.UrlDecode(
+                oid.Replace("%2F", "/").Replace("%2f", "/"));
+
+            var items = await _eContractRepository.GetJobStatusAsync(cleanOid);
+
+            var response = new ContractJobStatusResponse
+            {
+                JobDone     = items.Where(x => x.Category == "done")     .ToList(),
+                JobWaiting  = items.Where(x => x.Category == "waiting")  .ToList(),
+                JobReturned = items.Where(x => x.Category == "returned") .ToList(),
+                JobPending  = items.Where(x => x.Category == "pending")  .ToList(),
+            };
+
+            return ApiResponse<ContractJobStatusResponse>.SuccessResponse(
+                response,
+                $"Tổng: {items.Count} job — Done: {response.JobDone.Count}, " +
+                $"Waiting: {response.JobWaiting.Count}, Returned: {response.JobReturned.Count}, " +
+                $"Pending: {response.JobPending.Count}");
         }
 
         public async Task<ApiResponse<List<EContractDetails>>> GetEContractDetailsActionAsync(string oid)

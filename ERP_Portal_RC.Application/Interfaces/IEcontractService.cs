@@ -73,6 +73,8 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ApiResponse<string>> GetNextJobOIDAsync(string mainOid);
         Task<ApiResponse<string>> CreateJobAsync(InsertJobRequest request);
         Task<ApiResponse<JobStatusResponse>> GetJobStatusAsync(string referenceId, string factorId, string entryId);
+        /// <summary>Lấy trạng thái tất cả Job của hợp đồng — phân loại done/waiting/returned/pending.</summary>
+        Task<ApiResponse<ContractJobStatusResponse>> GetJobStatusAsync(string oid);
         Task<ApiResponse<IEnumerable<object>>> GetAttachmentsByOidAsync(string oid);
         //Task<ApiResponse<object>> AddMoreFilesAsync(string oid, string factorId, string entryId, List<string> fileLinks, string currentUser);
         Task<bool> CreateOrderAsync(EContractIntegrationRequestDto model, string merchantId, string orderOid, string crtUser);
