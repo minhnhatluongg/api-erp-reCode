@@ -368,8 +368,6 @@ namespace Interface.ReleaseInvoice.Services
         {
             var logMessages = new List<string>();
             string xslt = rawXslt;
-            int replaceCount = 0;
-            int injectionCount = 0;
 
             try
             {

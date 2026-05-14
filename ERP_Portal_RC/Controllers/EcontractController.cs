@@ -810,6 +810,7 @@ namespace API.ERP_Portal_RC.Controllers
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
+
         [HttpPost("de-xuat-captk")]
         [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiResponse<DeXuatCapTaiKhoanResponseDto>), StatusCodes.Status400BadRequest)]

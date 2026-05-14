@@ -27,7 +27,7 @@ namespace ERP_Portal_RC.Application.Services
                 string body = "";
                 string mailTo = dept.Email;
                 string mailCC = dept.Email_CC;
-                string frWebsite = "www.winerp.org";
+                string frWebsite = _smtp.PortalBaseUrl;
 
                 // Logic phân loại nội dung Mail theo code cũ
                 if (factorId == "JOB_00001") 
@@ -45,7 +45,7 @@ namespace ERP_Portal_RC.Application.Services
                 {
                     mailTo = "hoainv@win-tech.vn";
                     mailCC = "hoainv@win-tech.vn";
-                    frWebsite = "www.winerp.org";
+                    frWebsite = _smtp.PortalBaseUrl;
 
 
                     subject = $"ERP - YÊU CẦU PHÁT HÀNH HÓA ĐƠN – {master.CusTax} - {master.CusName}";
@@ -97,8 +97,7 @@ namespace ERP_Portal_RC.Application.Services
         {
             try
             {
-                var contractLink = $"{_smtp.PortalBaseUrl}/in-process/edit?oid={oid}";
-
+                //var contractLink = $"{_smtp.PortalBaseUrl}/in-process/edit?oid={oid}";
                 var body =
                     $"Kính gửi Anh/Chị!\n\n" +
                     $"Hợp đồng: {oid}\n" +
@@ -106,9 +105,9 @@ namespace ERP_Portal_RC.Application.Services
                     $"Công ty: {cusName}\n" +
                     $"Kinh doanh: {saleFullName}\n" +
                     $"Kế toán kiểm tra: {ktName}\n\n" +
-                    $"Anh/Chị vui lòng vào link bên dưới để phê duyệt hợp đồng:\n" +
-                    $"{contractLink}\n\n" +
-                    $"P/S: Email này được gửi tự động từ hệ thống ERP Portal (www.winerp.org). " +
+                    //$"Anh/Chị vui lòng vào link bên dưới để phê duyệt hợp đồng:\n" +
+                    //$"{contractLink}\n\n" +
+                    $"P/S: Email này được gửi tự động từ hệ thống ERP Portal (ERP Lot Việt). " +
                     $"Vui lòng không reply lại email này.\n\n" +
                     $"Chân thành cảm ơn!";
 
@@ -133,7 +132,6 @@ namespace ERP_Portal_RC.Application.Services
             }
             catch (Exception ex)
             {
-                // Fire-and-forget: không ném exception để nghiệp vụ chính không bị ảnh hưởng
                 _logger.LogWarning("[MailService] Gửi mail thất bại cho OID={OID}: {Error}", oid, ex.Message);
             }
         }

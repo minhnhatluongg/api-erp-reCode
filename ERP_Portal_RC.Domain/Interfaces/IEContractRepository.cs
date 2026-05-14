@@ -97,6 +97,10 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<OwnerContract> GetOwnerContractAsync(string companyId = "26");
         Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID);
         Task<DeXuatCapTaiKhoanResult> DeXuatAsync(ProposeCreateAccount entity);
+        /// <summary>Bypass cấp TK (captk): 0→101→201.</summary>
+        Task<DeXuatCapTaiKhoanResult> BypassCapTaiKhoanAsync(string oidContract, string cmpnId, string crtUser);
+        /// <summary>Generic bypass: tạo job + đẩy 0→101→finalSign cho bất kỳ loại job nào.</summary>
+        Task<DeXuatCapTaiKhoanResult> BypassJobAsync(string oidContract, string factorId, string entryId, int finalSign, string crtUser);
         /// Lấy MerchantId từ EVat_CompanyInfo theo MST
         Task<string?> GetMerchantIdAsync(string connectionString, string mst);
 

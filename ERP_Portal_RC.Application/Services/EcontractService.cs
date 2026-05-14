@@ -1751,6 +1751,31 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
+        public async Task<ApiResponse<DeXuatCapTaiKhoanResponseDto>> BypassCapTaiKhoanAsync(string oidContract, string crtUser)
+        {
+            try
+            {
+                var result = await _eContractRepository.BypassCapTaiKhoanAsync(
+                    oidContract, cmpnId: "26", crtUser);
+
+                var data = new DeXuatCapTaiKhoanResponseDto
+                {
+                    OIDJob        = result.OIDJob,
+                    ReferenceInfo = result.ReferenceInfo
+                };
+
+                string message = result.IsAlreadyExists
+                    ? "Hợp đồng đã được cấp tài khoản trước đó (idempotent)."
+                    : $"[BYPASS] Cấp tài khoản hoàn tất 0→101→201. Job: {result.OIDJob}";
+
+                return ApiResponse<DeXuatCapTaiKhoanResponseDto>.SuccessResponse(data, message);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<DeXuatCapTaiKhoanResponseDto>.ErrorResponse(ex.Message, statusCode: 400);
+            }
+        }
+
         public async Task<ApiResponse<InvCounterResponseDto>> GetInvCounterByMSTAsync(
             InvCounterRequestDto request)
         {
