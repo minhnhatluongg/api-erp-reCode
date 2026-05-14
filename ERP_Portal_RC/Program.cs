@@ -1,7 +1,9 @@
 using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.Interfaces;
+using ERP_Portal_RC.Application.Interfaces.Admin;
 using ERP_Portal_RC.Application.Mappings;
 using ERP_Portal_RC.Application.Services;
+using ERP_Portal_RC.Application.Services.Admin;
 using ERP_Portal_RC.Domain.Common.Logging;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
@@ -133,6 +135,9 @@ builder.Services.AddScoped<ISalesHierarchyRepository, SalesHierarchyRepository>(
 builder.Services.AddScoped<IDSignaturesRepository, DSignaturesRepository>();
 builder.Services.AddScoped<IEContractRepository, EContractRepository>();
 builder.Services.AddScoped<IEContractV26Repository, EContractV26Repository>();
+builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
+builder.Services.AddScoped<IAdminEcontractService, AdminEcontractService>();
+builder.Services.AddScoped<IAdminContractService, AdminContractService>();
 builder.Services.AddScoped<IWebhookRepository, WebhookRepository>();
 builder.Services.AddSingleton<WebhookFileLogger>();
 builder.Services.AddSingleton<IncomIntegrationFileLogger>();
@@ -221,6 +226,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
+    // ── Doc 1: API thông thường ──────────────────────────────────────────
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "ERP Portal API",
@@ -232,6 +238,44 @@ builder.Services.AddSwaggerGen(options =>
             Email = "cusocisme@gmail.com or minhnhatluongwork@gmail.com"
         }
     });
+
+    // ── Doc 2: Admin API ──────────────────────────────────────────────────
+    options.SwaggerDoc("admin", new OpenApiInfo
+    {
+        Title = "🔐 ERP Portal — Admin API",
+        Version = "admin",
+        Description = "API dành riêng cho kỹ thuật / admin hỗ trợ xử lý hợp đồng cũ. Yêu cầu UserCode trong AllowedUserCodes."
+    });
+
+    // Phân nhóm doc:
+    //   - route bắt đầu bằng "api/admin" → chỉ xuất hiện trong doc "admin"
+    //   - các route còn lại             → chỉ xuất hiện trong doc "v1"
+    options.DocInclusionPredicate((docName, apiDesc) =>
+    {
+        try
+        {
+            // Ưu tiên GroupName (đặt qua [ApiExplorerSettings])
+            var groupName = apiDesc.GroupName;
+            if (!string.IsNullOrEmpty(groupName))
+                return groupName == docName;
+
+            // Fallback: kiểm tra RelativePath
+            var relativePath = apiDesc.RelativePath ?? "";
+            var isAdmin      = relativePath.StartsWith("api/admin", StringComparison.OrdinalIgnoreCase);
+            return docName == "admin" ? isAdmin : !isAdmin;
+        }
+        catch
+        {
+            return docName == "v1";
+        }
+    });
+
+    // Tránh lỗi 500 khi có duplicate operation IDs (2 controller cùng route prefix)
+    options.ResolveConflictingActions(apiDescs => apiDescs.First());
+
+    // CustomSchemaIds để tránh conflict khi nhiều class cùng tên ở namespace khác
+    options.CustomSchemaIds(type => type.FullName?.Replace("+", ".") ?? type.Name);
+
     options.EnableAnnotations();
 
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -288,7 +332,6 @@ if (!Directory.Exists(uploadPath))
 {
     Directory.CreateDirectory(uploadPath);
 }
-// Sửa lại FileProvider để nó map đúng cấu trúc thư mục
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadPath),
@@ -309,7 +352,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Portal API V1");
+        options.SwaggerEndpoint("/swagger/v1/swagger.json",    "ERP Portal API");
+        options.SwaggerEndpoint("/swagger/admin/swagger.json", "🔐 Admin API");
         options.RoutePrefix = "";
         options.DocumentTitle = "ERP Portal API Documentation";
         options.DefaultModelsExpandDepth(-1);
@@ -326,7 +370,8 @@ else
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "ERP Portal API V1");
+        options.SwaggerEndpoint("/swagger/v1/swagger.json",    "ERP Portal API");
+        options.SwaggerEndpoint("/swagger/admin/swagger.json", "🔐 Admin API");
         options.RoutePrefix = "";
     });
 }

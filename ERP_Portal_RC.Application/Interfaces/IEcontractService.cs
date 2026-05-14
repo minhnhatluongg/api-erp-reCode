@@ -51,6 +51,8 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<ContractStatusResponse> GetContractReviewDataAsync(string oid);
         Task<ApiResponse<object>> DeleteDraftAsync(DeleteEcontractRequest request, string username);
         Task<ApiResponse<object>> UnSignAsync(UnSignRequest model);
+        /// <summary>Bypass cấp tài khoản: 0→101→201. Dùng cho HĐ cũ chưa có job.</summary>
+        Task<ApiResponse<DeXuatCapTaiKhoanResponseDto>> BypassCapTaiKhoanAsync(string oidContract, string crtUser);
         /// <summary>
         /// Rút trình ký — chỉ cho phép khi hợp đồng đang ở SignNumb 101 và chưa có 301/501.
         /// </summary>

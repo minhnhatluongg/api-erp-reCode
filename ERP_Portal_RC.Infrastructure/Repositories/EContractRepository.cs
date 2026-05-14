@@ -923,7 +923,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     @"SELECT TOP 1 ISNULL(SignNumb, 0)
                       FROM BosApproval.dbo.zsgn_webContracts WITH (NOLOCK)
                       WHERE OID = @OID AND FactorID = 'EContract'
-                      ORDER BY currSignDate DESC",
+                      ORDER BY crt_date DESC",
                     new { model.OID }, trans);
 
                 // 3. Thực hiện gỡ ký - Xóa thông tin trình ký tại zsgn_webContracts
@@ -2110,6 +2110,91 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             {
                 OIDJob = Get("OIDJob"),
                 ReferenceInfo = Get("Message"),
+                IsAlreadyExists = isSuccess == 2
+            };
+        }
+
+        public async Task<DeXuatCapTaiKhoanResult> BypassCapTaiKhoanAsync(string oidContract, string cmpnId, string crtUser)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var param = new DynamicParameters();
+            param.Add("@OIDContract", oidContract);
+            param.Add("@CmpnID",     cmpnId);
+            param.Add("@Crt_User",   crtUser);
+
+            IDictionary<string, object>? row = null;
+
+            using var multi = await con.QueryMultipleAsync(
+                "sp_CapTaiKhoan_Bypass",
+                param,
+                commandType: CommandType.StoredProcedure,
+                commandTimeout: 60);
+
+            while (!multi.IsConsumed)
+            {
+                var rows = (await multi.ReadAsync()).ToList();
+                if (rows.Count == 0) continue;
+                var candidate = (IDictionary<string, object>)rows[0];
+                if (candidate.ContainsKey("OIDJob")) { row = candidate; break; }
+            }
+
+            if (row == null)
+                throw new InvalidOperationException($"SP không trả về kết quả cho '{oidContract}'.");
+
+            var rowCI = new Dictionary<string, object>(row, StringComparer.OrdinalIgnoreCase);
+            string Get(string key) => rowCI.TryGetValue(key, out var v) ? v?.ToString() ?? "" : "";
+
+            int isSuccess = int.TryParse(Get("IsSuccess"), out var n) ? n : 0;
+
+            if (isSuccess == 0)
+                throw new InvalidOperationException(Get("Message"));
+
+            return new DeXuatCapTaiKhoanResult
+            {
+                OIDJob          = Get("OIDJob"),
+                ReferenceInfo   = Get("Message"),
+                IsAlreadyExists = isSuccess == 2
+            };
+        }
+
+        public async Task<DeXuatCapTaiKhoanResult> BypassJobAsync(
+            string oidContract, string factorId, string entryId, int finalSign, string crtUser)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var param = new DynamicParameters();
+            param.Add("@OIDContract", oidContract);
+            param.Add("@FactorID",    factorId);
+            param.Add("@EntryID",     entryId);
+            param.Add("@FinalSign",   finalSign);
+            param.Add("@CmpnID",      "26");
+            param.Add("@Crt_User",    crtUser);
+
+            IDictionary<string, object>? row = null;
+            using var multi = await con.QueryMultipleAsync(
+                "sp_Job_Bypass", param,
+                commandType: CommandType.StoredProcedure, commandTimeout: 60);
+
+            while (!multi.IsConsumed)
+            {
+                var rows = (await multi.ReadAsync()).ToList();
+                if (rows.Count == 0) continue;
+                var candidate = (IDictionary<string, object>)rows[0];
+                if (candidate.ContainsKey("OIDJob")) { row = candidate; break; }
+            }
+
+            if (row == null)
+                throw new InvalidOperationException($"SP không trả về kết quả cho '{oidContract}'.");
+
+            var rowCI = new Dictionary<string, object>(row, StringComparer.OrdinalIgnoreCase);
+            string Get(string key) => rowCI.TryGetValue(key, out var v) ? v?.ToString() ?? "" : "";
+            int isSuccess = int.TryParse(Get("IsSuccess"), out var n) ? n : 0;
+
+            if (isSuccess == 0) throw new InvalidOperationException(Get("Message"));
+
+            return new DeXuatCapTaiKhoanResult
+            {
+                OIDJob          = Get("OIDJob"),
+                ReferenceInfo   = Get("Message"),
                 IsAlreadyExists = isSuccess == 2
             };
         }

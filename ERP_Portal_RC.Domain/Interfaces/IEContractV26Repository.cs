@@ -15,5 +15,6 @@ namespace ERP_Portal_RC.Domain.Interfaces
             bool viewAll,
             int page,
             int pageSize);
+
     }
 }
