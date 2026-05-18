@@ -51,7 +51,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
         public async Task<PagedEContractByDateResult> GetContractsByDateOnlyAsync(string fromDate, string toDate, string? strSearch = null, int? statusFilter = null, int page = 1, int pageSize = 20, CancellationToken ct = default)
         {
-            await using var conn = _dbFactory.GetConnection(BosOnline);
+            using var conn = _dbFactory.GetConnection(BosOnline);
 
             var parameters = new DynamicParameters();
             parameters.Add("@Frm_date", fromDate, DbType.String);

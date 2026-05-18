@@ -142,7 +142,47 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     new { OID = contractOid });
 
                 if (contract == null)
-                    return (false, $"Không tìm thấy hợp đồng '{contractOid}' hoặc thiếu gói hóa đơn.");
+                {
+                    // Không có gói hóa đơn → bypass EContractJobs
+                    // Insert thẳng vào zsgn_EContractJobs với SignNumb=101
+                    //
+                    // QUAN TRỌNG: OID phải có suffix "-000" để SP tính COID đúng:
+                    //   COID = LEFT(OID, LEN(OID)-4) → cắt "-000" → trả về contractOid
+                    //   → JOIN a.OID = tt8.COID trong CTE sẽ match đúng
+                    var jobOidNoPackage = contractOid + "-000";
+
+                    if (connApproval.State == ConnectionState.Closed) connApproval.Open();
+
+                    bool alreadyIn101 = await connApproval.ExecuteScalarAsync<int>(
+                        @"SELECT COUNT(1) FROM dbo.zsgn_EContractJobs WITH (NOLOCK)
+                          WHERE Variant19 = @OID AND FactorID = 'JOB_00005'
+                            AND EntryID = 'JB:010' AND SignNumb = 101",
+                        new { OID = contractOid }) > 0;
+
+                    if (alreadyIn101)
+                        return (true, $"[NO_PACKAGE] Đã có dòng 101 cho '{contractOid}'.");
+
+                    await connApproval.ExecuteAsync(
+                        @"INSERT INTO dbo.zsgn_EContractJobs
+                            (FactorID, OID, ODate, CmpnID, DataTbl,
+                             SignNumb, SignDate, Crt_Date, Crt_User,
+                             AppvRouteGroup, AppvRouteGrpTp, AppvMess, AppvMess_Html,
+                             Variant19, Variant26, Variant30, EntryID)
+                          VALUES
+                            ('JOB_00005', @JobOid, GETDATE(), '26', 'EContractJobs',
+                             101, GETDATE(), GETDATE(), @CrtUser,
+                             '', 1, @AppvMess, @AppvMess,
+                             @ContractOid, @ContractOid, '1', 'JB:010')",
+                        new
+                        {
+                            JobOid      = jobOidNoPackage,  // contractOid + "-000"
+                            ContractOid = contractOid,       // Variant19 = contract OID gốc
+                            CrtUser     = userId,
+                            AppvMess    = "[NO_PACKAGE] Webhook: Kế toán xem hóa đơn nháp (không có gói)"
+                        });
+
+                    return (true, $"[NO_PACKAGE] Đã insert dòng 101 cho '{contractOid}' (jobOid={jobOidNoPackage}).");
+                }
 
                 // Gọi sp_EContract_InsertJob_Full_v2 — tạo job VÀ đẩy 0→101 luôn
                 var spParams = new DynamicParameters();

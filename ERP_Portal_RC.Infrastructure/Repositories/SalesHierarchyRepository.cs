@@ -91,7 +91,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 new { UserCode = emplId });
 
             if (alreadyExists > 0)
-                return emplId; // đã có, bỏ qua
+                return emplId; 
 
             // ── Bước 2: Gọi SP bosInsertUserOnApp ───────────────────────────
             var parameters = new DynamicParameters();
@@ -133,7 +133,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                     Email     = email,
                     Password  = encryptedPassword,
                     FullName  = fullName,
-                    DName     = fullName   // DName = tên hiển thị, dùng fullName làm mặc định
+                    DName     = fullName   
                 });
 
             return emplId;
