@@ -475,7 +475,7 @@ namespace API.ERP_Portal_RC.Controllers
         /// <summary>
         /// Lấy danh sách job kỹ thuật (JobKT) theo OID.
         /// </summary>
-        /// <param name="OID"></param>
+        /// <param name="OID"> </param>
         /// <returns></returns>
         /// <summary>
         /// Lấy trạng thái tất cả Job của hợp đồng — phân loại rõ ràng.

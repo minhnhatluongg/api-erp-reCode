@@ -49,6 +49,13 @@ namespace ERP_Portal_RC.Domain.Interfaces
         /// Không cho phép update khi SignNumb = 201 (đã ký hoàn tất).
         /// </summary>
         Task<string> UpdateFullContractAsync(EContractMaster master, List<EContractDetails>? details);
+
+        /// <summary>
+        /// Tạo Job "Cấp tài khoản" + 2 dòng duyệt zsgn (0→101, 101→201) cho hợp đồng vừa lưu.
+        /// Dùng khi MST đã có TK sẵn → cần "nâng trạng thái đã cấp TK" mà không gọi API cấp TK.
+        /// Trả về OIDJob vừa tạo (rỗng nếu thất bại).
+        /// </summary>
+        Task<string> InsertCreateAccountJobAsync(EContractMaster master);
         Task CreateApprovalFlowAsync(EContractMaster master);
         Task<EContractStatusRaw> GetContractStatusRawAsync(string oid);
         // Nghiệp vụ xóa nháp

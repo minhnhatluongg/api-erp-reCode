@@ -14,6 +14,7 @@
         public string? SaleEmID { get; set; }
         public int CurrSignNumb { get; set; }
         public int currSignNumbJobKT { get; set; }
+        public bool isUsingAcc { get; set;}
         public bool isKTTT_1 { get; set; }
         public bool is_NopHSS { get; set; }
         public DateTime date_NopHSS { get; set; }

@@ -241,12 +241,10 @@ namespace API.ERP_Portal_RC.Controllers
 
             var response = new ContractAllFilesResponse { Oid = userCode };
 
-            // ── Phần 1: Attachments — scan year/month, lọc folder bắt đầu bằng userCode_ ──
+            // ── Phần 1: Attachments — group theo folder ──────────────────────
             if (Directory.Exists(uploadRoot))
             {
                 var yearDirs = Directory.GetDirectories(uploadRoot);
-
-                // Lọc theo năm nếu có truyền
                 if (year.HasValue)
                     yearDirs = yearDirs
                         .Where(d => Path.GetFileName(d) == year.Value.ToString())
@@ -256,7 +254,6 @@ namespace API.ERP_Portal_RC.Controllers
                     foreach (var monthDir in Directory.GetDirectories(yearDir))
                         foreach (var oidDir in Directory.GetDirectories(monthDir))
                         {
-                            // Chỉ lấy folder của user này
                             var folderName = Path.GetFileName(oidDir);
                             if (!folderName.StartsWith(userCode + "_",
                                 StringComparison.OrdinalIgnoreCase)) continue;
@@ -267,34 +264,44 @@ namespace API.ERP_Portal_RC.Controllers
                             var list = JsonSerializer.Deserialize<List<ContractFileMetadata>>(
                                 System.IO.File.ReadAllText(metaPath)) ?? new();
 
-                            response.Attachments.AddRange(list.Select(f => new ContractFileItem
+                            if (!list.Any()) continue;
+
+                            // Group vào 1 folder entry
+                            response.Attachments.Add(new ContractFolderGroup
                             {
-                                FileName     = f.FileName,
-                                OriginalName = f.OriginalName,
-                                Url          = f.Url,
-                                Extension    = f.Extension,
-                                SizeBytes    = f.SizeBytes,
-                                UploadedAt   = f.UploadedAt,
-                                Category     = "attach"
-                            }));
+                                Folder = folderName,
+                                Files  = list
+                                    .OrderByDescending(f => f.UploadedAt)
+                                    .Select(f => new ContractFileItem
+                                    {
+                                        FileName     = f.FileName,
+                                        OriginalName = f.OriginalName,
+                                        Url          = f.Url,
+                                        Extension    = f.Extension,
+                                        SizeBytes    = f.SizeBytes,
+                                        UploadedAt   = f.UploadedAt,
+                                        Category     = "attach"
+                                    }).ToList()
+                            });
                         }
             }
 
-            // ── Phần 2: KyThuatMau — folder bắt đầu bằng userCode_ ──────────
+            // ── Phần 2: KyThuatMau — group theo folder ───────────────────────
             if (Directory.Exists(kyThuatRoot))
             {
                 foreach (var oidDir in Directory.GetDirectories(kyThuatRoot))
                 {
                     var folderName = Path.GetFileName(oidDir);
-                    if (!folderName.StartsWith(userCode + "_",
+                    if (!folderName.StartsWith(userCode,
                         StringComparison.OrdinalIgnoreCase)) continue;
 
-                    // Lọc theo năm nếu có (dùng creation time của folder)
                     if (year.HasValue)
                     {
                         var folderDate = Directory.GetCreationTime(oidDir);
                         if (folderDate.Year != year.Value) continue;
                     }
+
+                    var templateFiles = new List<ContractFileItem>();
 
                     foreach (var filePath in Directory.GetFiles(oidDir, "*.*",
                         SearchOption.AllDirectories))
@@ -303,30 +310,42 @@ namespace API.ERP_Portal_RC.Controllers
                         if (info.Name.Equals("metadata.json",
                             StringComparison.OrdinalIgnoreCase)) continue;
 
-                        var rel = Path.GetRelativePath(
-                            Path.GetDirectoryName(kyThuatRoot)!, filePath)
+                        var relFromUploads = Path.GetRelativePath(uploadRoot, filePath)
                             .Replace("\\", "/");
+                        var ext = info.Extension.ToLowerInvariant();
 
-                        response.Templates.Add(new ContractFileItem
+                        templateFiles.Add(new ContractFileItem
                         {
                             FileName     = info.Name,
                             OriginalName = info.Name,
-                            Url          = $"{baseUrl}/{rel}",
-                            Extension    = info.Extension.ToLowerInvariant(),
+                            Url          = $"{baseUrl.TrimEnd('/')}/uploads/{relFromUploads}",
+                            Extension    = ext,
                             SizeBytes    = info.Length,
                             UploadedAt   = info.CreationTime,
-                            Category     = "template"
+                            Category     = ext == ".pdf" ? "template-view" : "template-download"
                         });
                     }
+
+                    if (!templateFiles.Any()) continue;
+
+                    response.Templates.Add(new ContractFolderGroup
+                    {
+                        Folder = folderName,
+                        Files  = templateFiles.OrderByDescending(f => f.UploadedAt).ToList()
+                    });
                 }
             }
 
-            response.Attachments = response.Attachments.OrderByDescending(f => f.UploadedAt).ToList();
-            response.Templates   = response.Templates.OrderByDescending(f => f.UploadedAt).ToList();
+            // Sắp xếp nhóm theo folder mới nhất
+            response.Attachments = response.Attachments
+                .OrderByDescending(g => g.Files.Max(f => f.UploadedAt)).ToList();
+            response.Templates   = response.Templates
+                .OrderByDescending(g => g.Files.Max(f => f.UploadedAt)).ToList();
 
             return Ok(ApiResponse<ContractAllFilesResponse>.SuccessResponse(
                 response,
-                $"User {userCode}: {response.TotalAttachments} file đính kèm, {response.TotalTemplates} file mẫu."));
+                $"User {userCode}: {response.TotalAttachments} file đính kèm trong {response.Attachments.Count} HĐ, " +
+                $"{response.TotalTemplates} file mẫu trong {response.Templates.Count} HĐ."));
         }
 
         // ── API: User xem TỔNG QUAN file đã upload (dashboard) ────────────────
@@ -525,7 +544,7 @@ namespace API.ERP_Portal_RC.Controllers
 
             var response = new ContractAllFilesResponse { Oid = oid };
 
-            // ── Phần 1: Attachments (metadata.json) ──────────────────────────
+            // ── Phần 1: Attachments — group theo folder ──────────────────────
             if (Directory.Exists(uploadRoot))
             {
                 foreach (var yearDir in Directory.GetDirectories(uploadRoot))
@@ -537,23 +556,34 @@ namespace API.ERP_Portal_RC.Controllers
                         var list = JsonSerializer.Deserialize<List<ContractFileMetadata>>(
                             System.IO.File.ReadAllText(metaPath)) ?? new();
 
-                        response.Attachments.AddRange(list.Select(f => new ContractFileItem
+                        if (!list.Any()) continue;
+
+                        response.Attachments.Add(new ContractFolderGroup
                         {
-                            FileName     = f.FileName,
-                            OriginalName = f.OriginalName,
-                            Url          = f.Url,
-                            Extension    = f.Extension,
-                            SizeBytes    = f.SizeBytes,
-                            UploadedAt   = f.UploadedAt,
-                            Category     = "attach"
-                        }));
+                            Folder = cleanOid,
+                            Files  = list.OrderByDescending(f => f.UploadedAt)
+                                        .Select(f => new ContractFileItem
+                                        {
+                                            FileName     = f.FileName,
+                                            OriginalName = f.OriginalName,
+                                            Url          = f.Url,
+                                            Extension    = f.Extension,
+                                            SizeBytes    = f.SizeBytes,
+                                            UploadedAt   = f.UploadedAt,
+                                            Category     = "attach"
+                                        }).ToList()
+                        });
                     }
             }
 
-            // ── Phần 2: KyThuatMau folder ────────────────────────────────────
-            var kyThuatDir = Path.Combine(kyThuatRoot, cleanOid);
+            // ── Phần 2: KyThuatMau folder — group theo folder ────────────────
+            // KyThuatMau folder name: cleanOid không có dấu _ (xóa / và :)
+            string cleanOidKT = oid.Replace("/", "").Replace(":", "").Trim();
+            var kyThuatDir    = Path.Combine(kyThuatRoot, cleanOidKT);
+
             if (Directory.Exists(kyThuatDir))
             {
+                var templateFiles = new List<ContractFileItem>();
                 foreach (var filePath in Directory.GetFiles(kyThuatDir, "*.*",
                     SearchOption.AllDirectories))
                 {
@@ -561,27 +591,29 @@ namespace API.ERP_Portal_RC.Controllers
                     if (info.Name.Equals("metadata.json", StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    // Build URL tương đối từ wwwroot
-                    var rel = Path.GetRelativePath(
-                        Path.GetDirectoryName(kyThuatRoot)!, filePath)
+                    var relFromUploads2 = Path.GetRelativePath(uploadRoot, filePath)
                         .Replace("\\", "/");
+                    var ext2 = info.Extension.ToLowerInvariant();
 
-                    response.Templates.Add(new ContractFileItem
+                    templateFiles.Add(new ContractFileItem
                     {
                         FileName     = info.Name,
                         OriginalName = info.Name,
-                        Url          = $"{baseUrl}/{rel}",
-                        Extension    = info.Extension.ToLowerInvariant(),
+                        Url          = $"{baseUrl.TrimEnd('/')}/uploads/{relFromUploads2}",
+                        Extension    = ext2,
                         SizeBytes    = info.Length,
                         UploadedAt   = info.CreationTime,
-                        Category     = "template"
+                        Category     = ext2 == ".pdf" ? "template-view" : "template-download"
                     });
                 }
-            }
 
-            // Sắp xếp theo ngày mới nhất
-            response.Attachments = response.Attachments.OrderByDescending(f => f.UploadedAt).ToList();
-            response.Templates   = response.Templates.OrderByDescending(f => f.UploadedAt).ToList();
+                if (templateFiles.Any())
+                    response.Templates.Add(new ContractFolderGroup
+                    {
+                        Folder = cleanOidKT,
+                        Files  = templateFiles.OrderByDescending(f => f.UploadedAt).ToList()
+                    });
+            }
 
             return Ok(ApiResponse<ContractAllFilesResponse>.SuccessResponse(
                 response,
