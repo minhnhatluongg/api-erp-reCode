@@ -37,6 +37,12 @@ builder.Services.AddKeyedScoped<EContractFileLogger>("InvoiceLogger", (sp, _) =>
         configuration: builder.Configuration,
         filePrefix: "Invoice_craft"
     ));
+// Logger riêng cho flow Save Contract + Cấp tài khoản
+builder.Services.AddKeyedScoped<EContractFileLogger>("CreateAccountLogger", (sp, _) =>
+    new EContractFileLogger(
+        configuration: builder.Configuration,
+        filePrefix: "Contract_CreateAccount"
+    ));
 //Config upload file
 var provider = new FileExtensionContentTypeProvider();
 provider.Mappings[".xslt"] = "text/xml";
@@ -122,6 +128,8 @@ builder.Services.AddScoped<ISignHSMService, SignHSMService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IServiceTypeService, ServiceTypeService>();
 builder.Services.AddScoped<ITvanRenewalService, TvanRenewalService>();
+builder.Services.AddScoped<ITaxService, TaxService>();
+builder.Services.AddScoped<IInvoiceTemplateService, InvoiceTemplateService>();
 builder.Services.AddScoped<IVirusScanService, ClamAvVirusScanService>();
 builder.Services.AddScoped<IVirusScanService, NoOpVirusScanService>();
 builder.Services.AddScoped<IChunkUploadService, ChunkUploadService>();
@@ -181,6 +189,7 @@ builder.Services.AddScoped<ISignHSMRepository, SignHSMRepository>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IServiceTypeRepository, ServiceTypeRepository>();
 builder.Services.AddScoped<ITvanRenewalRepository, TvanRenewalRepository>();
+builder.Services.AddScoped<ITaxRepository, TaxRepository>();
 
 //
 builder.Services.AddScoped<IRptUsedService, RptUsedService>();

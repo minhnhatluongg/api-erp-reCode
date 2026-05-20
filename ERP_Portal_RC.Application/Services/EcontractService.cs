@@ -5,12 +5,14 @@ using ERP_Portal_RC.Application.DTOs.Integration_Incom;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Common;
+using ERP_Portal_RC.Domain.Common.Logging;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.EntitiesIntergration;
 using ERP_Portal_RC.Domain.Enum;
 using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Newtonsoft.Json;
@@ -38,13 +40,17 @@ namespace ERP_Portal_RC.Application.Services
         private readonly FileConfig _fileConfig;
         private readonly IConnectionRepository _connectionRepo;
         private readonly IConfiguration _configuration;
+        private readonly ICapTaiKhoanService _capTaiKhoanService;
+        private readonly EContractFileLogger _accountLogger;
 
-        public EcontractService(IEContractRepository econtractRepo, 
-            IMailService mailService, 
+        public EcontractService(IEContractRepository econtractRepo,
+            IMailService mailService,
             IFileStorageService fileStorageService,
             IConnectionRepository connectionRepository,
             IConfiguration configuration,
-            IOptions<FileConfig> fileConfigOptions)
+            IOptions<FileConfig> fileConfigOptions,
+            ICapTaiKhoanService capTaiKhoanService,
+            [FromKeyedServices("CreateAccountLogger")] EContractFileLogger accountLogger)
         {
             _eContractRepository = econtractRepo;
             _mailService = mailService;
@@ -52,6 +58,8 @@ namespace ERP_Portal_RC.Application.Services
             _configuration = configuration;
             _connectionRepo = connectionRepository;
             _fileConfig = fileConfigOptions.Value;
+            _capTaiKhoanService = capTaiKhoanService;
+            _accountLogger = accountLogger;
         }
         public async Task<EContractServiceResult> GetAllEContractsAsync(string userName, EContractFilterRequest request, string groupList, string userCode)
         {
@@ -573,22 +581,205 @@ namespace ERP_Portal_RC.Application.Services
         #endregion
         public async Task<ApiResponse<string>> ProcessSaveContractAsync(ContractPreviewRequest request, string userCode)
         {
+            var master = MapToMaster(request, userCode);
+            var details = MapToDetails(request);
+            var oid = master.OID ?? string.Empty;
+            var mst = (master.CusTax ?? string.Empty).Replace(" ", string.Empty);
+
+            await _accountLogger.LogInfoAsync(oid,
+                $"BEGIN ProcessSaveContractAsync — MST={mst}, User={userCode}");
+
+            // ── Step 1: Lưu hợp đồng ─────────────────────────────────────────
             try
             {
-                var master = MapToMaster(request, userCode);
-                var details = MapToDetails(request);
-
                 await _eContractRepository.SaveFullContractAsync(master, details);
-
-                return ApiResponse<string>.SuccessResponse(
-                    master.OID,
-                    "Lưu hợp đồng và khởi tạo luồng phê duyệt thành công."
-                );
+                await _accountLogger.LogInfoAsync(oid, "SaveFullContract OK");
             }
             catch (Exception ex)
             {
-                return ApiResponse<string>.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 500);
+                await _accountLogger.LogErrorAsync(oid,
+                    "SaveFullContract FAIL", new { Error = ex.Message });
+                return ApiResponse<string>.ErrorResponse($"Lỗi lưu hợp đồng: {ex.Message}", 500);
             }
+
+            // ── Step 2: Cấp / xác nhận TK theo MST ───────────────────────────
+            var accountResult = await EnsureCustomerAccountAsync(master, request);
+
+            string finalMessage = accountResult.AlreadyHadAccount
+                ? "Lưu hợp đồng thành công. MST đã có tài khoản — đã nâng trạng thái 'Đã cấp TK'."
+                : (accountResult.AccountCreated
+                    ? "Lưu hợp đồng + cấp tài khoản thành công."
+                    : $"Lưu hợp đồng thành công, nhưng cấp tài khoản thất bại: {accountResult.Message}");
+
+            if (!accountResult.AlreadyHadAccount && !accountResult.AccountCreated)
+            {
+                // Vẫn trả 200 với OID + thông báo cảnh báo (hợp đồng đã lưu OK)
+                return ApiResponse<string>.SuccessResponseWithMeta(
+                    oid,
+                    new Dictionary<string, object>
+                    {
+                        ["accountCreated"] = false,
+                        ["alreadyHadAccount"] = false,
+                        ["accountMessage"] = accountResult.Message ?? string.Empty,
+                        ["accountErrorDetail"] = accountResult.ErrorDetail ?? string.Empty
+                    },
+                    finalMessage);
+            }
+
+            return ApiResponse<string>.SuccessResponseWithMeta(
+                oid,
+                new Dictionary<string, object>
+                {
+                    ["accountCreated"] = accountResult.AccountCreated,
+                    ["alreadyHadAccount"] = accountResult.AlreadyHadAccount,
+                    ["jobOid"] = accountResult.JobOid ?? string.Empty
+                },
+                finalMessage);
+        }
+
+        /// <summary>
+        /// Logic: Check MST đã có TK chưa.
+        ///  - Có rồi → bỏ qua API cấp TK, chỉ insert Job + dòng duyệt để nâng trạng thái "Đã cấp TK".
+        ///  - Chưa có → gọi CapTaiKhoanAsync. Nếu cấp OK → insert Job + dòng duyệt như trên.
+        /// </summary>
+        private async Task<AccountCreationOutcome> EnsureCustomerAccountAsync(
+            EContractMaster master, ContractPreviewRequest request)
+        {
+            var outcome = new AccountCreationOutcome();
+            var oid = master.OID ?? string.Empty;
+            var mst = (master.CusTax ?? string.Empty).Replace(" ", string.Empty);
+
+            if (string.IsNullOrEmpty(mst))
+            {
+                outcome.Message = "MST khách hàng trống — bỏ qua bước cấp TK.";
+                await _accountLogger.LogWarnAsync(oid, outcome.Message);
+                return outcome;
+            }
+
+            // 2a. Hỏi bosConfigure xem MST đã có TK chưa
+            ServerInfoRow? serverInfo;
+            try
+            {
+                serverInfo = _connectionRepo.GetServerInfo(mst, string.Empty);
+            }
+            catch (Exception ex)
+            {
+                outcome.Message = "Không thể kiểm tra MST trên bosConfigure.";
+                outcome.ErrorDetail = ex.Message;
+                await _accountLogger.LogErrorAsync(oid,
+                    "GetServerInfo EXCEPTION", new { Error = ex.Message });
+                return outcome;
+            }
+
+            if (serverInfo == null)
+            {
+                outcome.Message = "GetServerInfo trả về null.";
+                await _accountLogger.LogWarnAsync(oid, outcome.Message);
+                return outcome;
+            }
+
+            // 2b. CASE A — MST đã có TK → chỉ raise trạng thái
+            if (serverInfo.IsExistingCustomer)
+            {
+                outcome.AlreadyHadAccount = true;
+                await _accountLogger.LogInfoAsync(oid,
+                    "MST đã có tài khoản — skip API cấp TK",
+                    new { MST = mst, Server = serverInfo.SideServer });
+
+                outcome.JobOid = await TryInsertCreateAccountJobAsync(master);
+                return outcome;
+            }
+
+            // 2c. CASE B — MST chưa có TK → gọi CapTaiKhoanAsync
+            await _accountLogger.LogInfoAsync(oid,
+                "MST chưa có TK — bắt đầu gọi CapTaiKhoanAsync", new { MST = mst });
+
+            var capTkReq = BuildCapTaiKhoanRequest(master, request);
+            CreateAccountResponseDto capRes;
+            try
+            {
+                capRes = await _capTaiKhoanService.CapTaiKhoanAsync(capTkReq);
+            }
+            catch (Exception ex)
+            {
+                outcome.Message = "Exception khi gọi CapTaiKhoanAsync.";
+                outcome.ErrorDetail = ex.Message;
+                await _accountLogger.LogErrorAsync(oid,
+                    "CapTaiKhoanAsync EXCEPTION", new { Error = ex.Message });
+                return outcome;
+            }
+
+            if (!capRes.IsSuccess)
+            {
+                outcome.Message = capRes.Message;
+                outcome.ErrorDetail = capRes.ErrorDetail;
+                await _accountLogger.LogErrorAsync(oid,
+                    "CapTaiKhoanAsync FAIL",
+                    new { capRes.Message, capRes.ErrorDetail, capRes.CheckOK, capRes.DatabaseOK, capRes.WebAppOK });
+                return outcome;
+            }
+
+            outcome.AccountCreated = true;
+            await _accountLogger.LogInfoAsync(oid,
+                "CapTaiKhoanAsync OK",
+                new { capRes.CheckOK, capRes.DatabaseOK, capRes.WebAppOK });
+
+            // 2d. Sau khi cấp xong → nâng trạng thái "đã cấp TK"
+            outcome.JobOid = await TryInsertCreateAccountJobAsync(master);
+            return outcome;
+        }
+
+        private async Task<string?> TryInsertCreateAccountJobAsync(EContractMaster master)
+        {
+            try
+            {
+                var jobOid = await _eContractRepository.InsertCreateAccountJobAsync(master);
+                if (string.IsNullOrEmpty(jobOid))
+                {
+                    await _accountLogger.LogWarnAsync(master.OID ?? "",
+                        "InsertCreateAccountJob trả về rỗng — không tạo được Job.");
+                }
+                else
+                {
+                    await _accountLogger.LogInfoAsync(master.OID ?? "",
+                        "InsertCreateAccountJob OK", new { JobOid = jobOid });
+                }
+                return jobOid;
+            }
+            catch (Exception ex)
+            {
+                await _accountLogger.LogErrorAsync(master.OID ?? "",
+                    "InsertCreateAccountJob EXCEPTION", new { Error = ex.Message });
+                return null;
+            }
+        }
+
+        private static CreateAccountRequestDto BuildCapTaiKhoanRequest(
+            EContractMaster master, ContractPreviewRequest request)
+        {
+            return new CreateAccountRequestDto
+            {
+                MaSoThue = (master.CusTax ?? string.Empty).Replace(" ", string.Empty),
+                CMND_CCCD = string.Empty ?? string.Empty,
+                TenCongTy = master.CusName ?? string.Empty,
+                DiaChi = master.CusAddress ?? string.Empty,
+                SoTaiKhoanNH = master.CusBankNumber ?? string.Empty,
+                TenNganHang = master.CusBankAddress ?? string.Empty,
+                SoDienThoai = master.CusTel ?? string.Empty,
+                UyQuyen = master.CusFax ?? string.Empty,
+                Email = master.CusEmail ?? string.Empty,
+                Website = master.CusWebsite ?? string.Empty,
+                AllowUpdate = "0"
+            };
+        }
+
+        private sealed class AccountCreationOutcome
+        {
+            public bool AlreadyHadAccount { get; set; }
+            public bool AccountCreated { get; set; }
+            public string? JobOid { get; set; }
+            public string? Message { get; set; }
+            public string? ErrorDetail { get; set; }
         }
 
         public async Task<ApiResponse<string>> PatchContractAsync(ContractPreviewRequest request, string userCode)

@@ -69,6 +69,12 @@ namespace ERP_Portal_RC.Domain.Entities
         public string IsGiaHan { get; set; }
         public bool IsOnline { get; set; } = true;
         public bool IsTT78 { get; set; } = true;
+
+        /// <summary>
+        /// Map cột bit NULL `isUsingAcc` trên bảng EContracts (BosOnline).
+        /// Dùng <c>bool?</c> để phân biệt được 3 trạng thái: null (chưa set) / true / false.
+        /// </summary>
+        public bool? IsUsingAcc { get; set; }
         public string EcontracSys { get; set; }
         public string Ptk_PL { get; set; }
         public string isContractPaper { get; set; }

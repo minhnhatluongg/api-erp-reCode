@@ -501,7 +501,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             {
                 decimal amnt = d.ItemQtty * d.ItemPrice;
                 decimal vatAmnt = amnt * (d.VAT_Rate / 100);
-                string safeName = d.ItemName ?? ""; // Tránh NULL
+                string safeName = d.ItemName ?? ""; 
 
                 detailsTable.Rows.Add(
                     count++,                          // 1. ItemNo
@@ -564,7 +564,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CusBankAddress", master.CusBankAddress);
             parameters.Add("@CmpID_Sign", master.CmpID_Sign ?? "");
             parameters.Add("@CmpName_Sign", master.CmpName_Sign ?? "");
-            parameters.Add("@isUsingAcc", 0);
+            parameters.Add("@isUsingAcc", master.IsUsingAcc, DbType.Boolean);
             parameters.Add("@SignNumb", -1);
             parameters.Add("@tokenOID", master.tokenOID);
 
@@ -619,6 +619,85 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             catch { /* Tracking không block luồng chính */ }
 
             return master.OID;
+        }
+
+        /// <summary>
+        /// Tạo Job "Cấp tài khoản" + 2 dòng duyệt zsgn (0→101, 101→201).
+        /// Dùng khi MST đã có TK sẵn → chỉ cần "nâng trạng thái đã cấp TK" cho hợp đồng.
+        /// </summary>
+        public async Task<string> InsertCreateAccountJobAsync(EContractMaster master)
+        {
+            if (master == null || string.IsNullOrEmpty(master.OID))
+                return string.Empty;
+
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+
+            // 1. Tạo Job "Cấp TK" — wspInsert_EContractJobs_IsAuto_v22
+            var jobParams = new DynamicParameters();
+            jobParams.Add("@ReferenceID", master.OID);
+            jobParams.Add("@FactorID", "JOB_00003");
+            jobParams.Add("@EntryID", "JB:003");
+            jobParams.Add("@Descrip", master.Descrip ?? string.Empty);
+            jobParams.Add("@Crt_User", master.Crt_User ?? string.Empty);
+            jobParams.Add("@InvcSign", string.Empty);
+            jobParams.Add("@InvcFrm", 0);
+            jobParams.Add("@InvcEnd", 0);
+            jobParams.Add("@invcSample", string.Empty);
+            jobParams.Add("@CmpnID", string.IsNullOrEmpty(master.CmpnID) ? "26" : master.CmpnID);
+            jobParams.Add("@MailAcc", "ketoanhoadondientu@win-tech.vn");
+            jobParams.Add("@ReferenceInfo",
+                $"Yêu cầu cấp tài khoản {master.CusTax}-{master.CusName}");
+            jobParams.Add("@isAuto", true);
+
+            var oidJob = await conn.QueryFirstOrDefaultAsync<string>(
+                "BosOnline..wspInsert_EContractJobs_IsAuto_v22",
+                jobParams,
+                commandType: CommandType.StoredProcedure);
+
+            if (string.IsNullOrWhiteSpace(oidJob))
+                return string.Empty;
+
+            // 2. Duyệt step 0 → 101, 101 → 201 — BosApproval.dbo.zsgn_EContractJobs_NOR
+            await ApproveCreateAccountJobStep(conn, oidJob, master, 0, 101);
+            await ApproveCreateAccountJobStep(conn, oidJob, master, 101, 201);
+
+            return oidJob;
+        }
+
+        private static async Task ApproveCreateAccountJobStep(
+            IDbConnection conn,
+            string oidJob,
+            EContractMaster master,
+            int holdSignNumb,
+            int nextSignNumb)
+        {
+            var p = new DynamicParameters();
+            p.Add("@FactorID", "JOB_00002");
+            p.Add("@OID", oidJob);
+            p.Add("@ODate", DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"));
+            p.Add("@CmpnID", string.IsNullOrEmpty(master.CmpnID) ? "26" : master.CmpnID);
+            p.Add("@Crt_User", master.Crt_User ?? string.Empty);
+
+            p.Add("@DataTbl", "EContractJobs");
+            p.Add("@SignTble", "zsgn_EContractJobs");
+            p.Add("@SignChck", 0);
+            p.Add("@holdSignNumb", holdSignNumb);
+            p.Add("@nextSignNumb", nextSignNumb);
+            p.Add("@AppvMess",
+                $"Tự động duyệt Job Cấp TK {holdSignNumb}->{nextSignNumb} (MST đã có TK)");
+            p.Add("@EntryID", "JB:004");
+
+            // Variant fields theo pattern luồng cấp TK
+            p.Add("@Variant26", master.CusTax ?? string.Empty);
+            p.Add("@Variant27", master.CusTax ?? string.Empty);
+            p.Add("@Variant28", master.CmpnTax ?? "0312308303");
+            p.Add("@Variant29", string.Empty);
+            p.Add("@Variant30", "1");
+
+            await conn.ExecuteAsync(
+                "BosApproval.dbo.zsgn_EContractJobs_NOR",
+                p,
+                commandType: CommandType.StoredProcedure);
         }
 
         public async Task<string> UpdateFullContractAsync(EContractMaster master, List<EContractDetails>? details)
@@ -1805,14 +1884,31 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@ReferenceDate", request.ReferenceDate);
             parameters.Add("@ReferenceInfo", request.ReferenceInfo ?? "");
             parameters.Add("@InvcSample", request.InvcSample);
-            parameters.Add("@FileInvoice", request.FileInvoice ?? ""); // Truyền link full
-            parameters.Add("@FileOther", request.FileOther ?? "");     // Truyền link full
+            parameters.Add("@FileInvoice", request.FileInvoice ?? "", DbType.String);
+            parameters.Add("@FileOther",   request.FileOther   ?? "", DbType.String);
 
-            return await conn.QueryFirstOrDefaultAsync<string>(
+            using var multi = await conn.QueryMultipleAsync(
                 "sp_EContract_InsertJob_Full_v2",
                 parameters,
-                commandType: CommandType.StoredProcedure
-            );
+                commandType: CommandType.StoredProcedure);
+
+            var row = await multi.ReadFirstOrDefaultAsync<dynamic>();
+            if (row == null)
+                throw new InvalidOperationException("SP không trả về kết quả.");
+
+            var rowDict = (IDictionary<string, object>)row;
+            string excStatus = rowDict.TryGetValue("excStatus", out var es) ? es?.ToString() ?? "" : "";
+            string jobOid    = rowDict.TryGetValue("NewJobOID", out var jo) ? jo?.ToString() ?? "" : "";
+
+            // excStatus = "0|<error>" khi SP lỗi (CATCH block)
+            if (excStatus.StartsWith("0|"))
+                throw new InvalidOperationException($"SP lỗi: {excStatus[2..]}");
+
+            // Nếu không có excStatus (kết quả lạ), kiểm tra jobOid có suffix -NNN
+            if (!string.IsNullOrEmpty(jobOid))
+                return jobOid;
+
+            throw new InvalidOperationException($"SP trả về dữ liệu không hợp lệ. excStatus={excStatus}");
         }
 
         public async Task<JobStatusResponse> CheckJobStatusAsync(string referenceId, string factorId, string entryId)
