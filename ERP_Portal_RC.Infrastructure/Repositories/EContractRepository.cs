@@ -1,8 +1,10 @@
 ﻿using Dapper;
+using ERP_Portal_RC.Domain.Common.Logging;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.EntitiesIntergration;
 using ERP_Portal_RC.Domain.Interfaces;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -25,16 +27,22 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         private readonly IDbConnectionFactory _dbConnectionFactory;
         private readonly IDSignaturesRepository _dSign;
         private readonly IConfiguration _configuration;
+        private readonly EContractFileLogger _jobLogger;
         private const string BosOnline = "BosOnline";
         private const string BosApproval = "BosApproval";
         private const string BosControlEVAT = "BosControlEVAT";
         private const string BosDocument = "BosDocument";
         private const string BosCataloge = "BosCataloge";
-        public EContractRepository(IDbConnectionFactory dbConnectionFactory, IDSignaturesRepository dSign, IConfiguration configuration)
+        public EContractRepository(
+            IDbConnectionFactory dbConnectionFactory,
+            IDSignaturesRepository dSign,
+            IConfiguration configuration,
+            [FromKeyedServices("JobInsertLogger")] EContractFileLogger jobLogger)
         {
             _dbConnectionFactory = dbConnectionFactory;
             _dSign = dSign;
             _configuration = configuration;
+            _jobLogger = jobLogger;
         }
 
         public async Task<ListEcontractViewModel> CountList(string crtUser, string dateStart, string dateEnd)
@@ -1864,6 +1872,34 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
         public async Task<string> InsertJobFullAsync(InsertJobRequest request)
         {
+            const string SpName = "sp_EContract_InsertJob_Full_v3";
+
+            var inputSnapshot = new
+            {
+                request.ReferenceID,
+                request.EntryID,
+                request.FactorID,
+                request.CmpnID,
+                request.OperDept,
+                request.Crt_User,
+                request.CusTax,
+                request.CusName,
+                request.EntryName,
+                request.ItemID,
+                request.InvcSign,
+                request.InvcFrm,
+                request.InvcEnd,
+                request.ReferenceDate,
+                request.ReferenceInfo,
+                request.InvcSample,
+                FileInvoiceLen = (request.FileInvoice ?? string.Empty).Length,
+                FileOtherLen   = (request.FileOther   ?? string.Empty).Length,
+                DescripLen     = (request.Descrip     ?? string.Empty).Length
+            };
+
+            await _jobLogger.LogInfoAsync(request.ReferenceID ?? string.Empty,
+                $"BEGIN {SpName}", inputSnapshot);
+
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
 
             var parameters = new DynamicParameters();
@@ -1884,31 +1920,136 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@ReferenceDate", request.ReferenceDate);
             parameters.Add("@ReferenceInfo", request.ReferenceInfo ?? "");
             parameters.Add("@InvcSample", request.InvcSample);
-            parameters.Add("@FileInvoice", request.FileInvoice ?? "", DbType.String);
-            parameters.Add("@FileOther",   request.FileOther   ?? "", DbType.String);
+            parameters.Add("@FileInvoice", request.FileInvoice ?? "", DbType.String, size: -1);
+            parameters.Add("@FileOther",   request.FileOther   ?? "", DbType.String, size: -1);
 
-            using var multi = await conn.QueryMultipleAsync(
-                "sp_EContract_InsertJob_Full_v2",
-                parameters,
-                commandType: CommandType.StoredProcedure);
+            try
+            {
+                using var multi = await conn.QueryMultipleAsync(
+                    SpName,
+                    parameters,
+                    commandType: CommandType.StoredProcedure);
 
-            var row = await multi.ReadFirstOrDefaultAsync<dynamic>();
-            if (row == null)
-                throw new InvalidOperationException("SP không trả về kết quả.");
+                /* ════════════════════════════════════════════════════════
+                   FIX: Proc con [zsgn_EContractJobs_NOR] và chuỗi proc duyệt
+                   có thể tự SELECT ra nhiều result set "rác" (ExecValue,
+                   currSignNumb, …). Trước đó lấy ReadFirstOrDefault chỉ
+                   được result set đầu — không có excStatus → log "RawRow"
+                   sai schema.
 
-            var rowDict = (IDictionary<string, object>)row;
-            string excStatus = rowDict.TryGetValue("excStatus", out var es) ? es?.ToString() ?? "" : "";
-            string jobOid    = rowDict.TryGetValue("NewJobOID", out var jo) ? jo?.ToString() ?? "" : "";
+                   Bây giờ DUYỆT QUA TỪNG result set, tìm cái có cột
+                   "excStatus" — đó mới là output của store cha. Các
+                   result set khác bỏ qua bằng multi.Read<dynamic>() để
+                   advance pointer.
+                   ════════════════════════════════════════════════════════ */
+                IDictionary<string, object>? rowDict = null;
+                int rsIndex = 0;
+                var skippedShapes = new List<string>(); // log để debug nếu cần
 
-            // excStatus = "0|<error>" khi SP lỗi (CATCH block)
-            if (excStatus.StartsWith("0|"))
-                throw new InvalidOperationException($"SP lỗi: {excStatus[2..]}");
+                while (!multi.IsConsumed)
+                {
+                    var rs = (await multi.ReadAsync<dynamic>()).ToList();
+                    rsIndex++;
+                    if (rs.Count == 0) continue;
 
-            // Nếu không có excStatus (kết quả lạ), kiểm tra jobOid có suffix -NNN
-            if (!string.IsNullOrEmpty(jobOid))
-                return jobOid;
+                    var firstRow = (IDictionary<string, object>)rs[0];
+                    if (firstRow.ContainsKey("excStatus"))
+                    {
+                        rowDict = firstRow;
+                        break; // tìm được result set mong muốn → dừng
+                    }
+                    // Lưu lại shape để log nếu cuối cùng không thấy excStatus
+                    skippedShapes.Add($"[#{rsIndex}: {string.Join(",", firstRow.Keys)}]");
+                }
 
-            throw new InvalidOperationException($"SP trả về dữ liệu không hợp lệ. excStatus={excStatus}");
+                if (rowDict == null)
+                {
+                    await _jobLogger.LogErrorAsync(request.ReferenceID ?? string.Empty,
+                        $"{SpName} không trả về result set có cột excStatus",
+                        new
+                        {
+                            request.FactorID,
+                            request.EntryID,
+                            ResultSetsScanned = rsIndex,
+                            SkippedShapes = skippedShapes
+                        });
+                    throw new InvalidOperationException(
+                        $"{SpName} không trả về result set có cột excStatus (đã quét {rsIndex} result sets).");
+                }
+
+                string excStatus = rowDict.TryGetValue("excStatus", out var es) ? es?.ToString() ?? "" : "";
+                string jobOid    = rowDict.TryGetValue("NewJobOID", out var jo) ? jo?.ToString() ?? "" : "";
+
+                // excStatus = "0|<error> | line=N | err#=N | proc=..."
+                if (excStatus.StartsWith("0|"))
+                {
+                    var sqlErr = excStatus.Length > 2 ? excStatus[2..] : excStatus;
+                    await _jobLogger.LogErrorAsync(request.ReferenceID ?? string.Empty,
+                        $"{SpName} CATCH block fired",
+                        new
+                        {
+                            SqlError = sqlErr,
+                            request.FactorID,
+                            request.EntryID,
+                            request.CusTax,
+                            request.Crt_User
+                        });
+                    throw new InvalidOperationException($"{SpName} lỗi: {sqlErr}");
+                }
+
+                if (!string.IsNullOrEmpty(jobOid))
+                {
+                    await _jobLogger.LogInfoAsync(request.ReferenceID ?? string.Empty,
+                        $"{SpName} OK",
+                        new { JobOid = jobOid, excStatus });
+                    return jobOid;
+                }
+
+                await _jobLogger.LogErrorAsync(request.ReferenceID ?? string.Empty,
+                    $"{SpName} trả dữ liệu không hợp lệ",
+                    new { excStatus, RawRow = rowDict });
+                throw new InvalidOperationException(
+                    $"{SpName} trả về dữ liệu không hợp lệ. excStatus={excStatus}");
+            }
+            catch (SqlException sqlEx)
+            {
+                // SQL exception thoát ra ngoài transaction của SP (vd connection lỗi,
+                // RAISERROR severity > 16, deadlock, timeout). CATCH của SP không bắt được.
+                await _jobLogger.LogErrorAsync(request.ReferenceID ?? string.Empty,
+                    $"{SpName} SqlException",
+                    new
+                    {
+                        sqlEx.Number,
+                        sqlEx.State,
+                        sqlEx.Class,
+                        sqlEx.LineNumber,
+                        sqlEx.Procedure,
+                        sqlEx.Server,
+                        sqlEx.Message,
+                        request.FactorID,
+                        request.EntryID,
+                        request.CusTax
+                    });
+                throw;
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                await _jobLogger.LogErrorAsync(request.ReferenceID ?? string.Empty,
+                    $"{SpName} Exception ngoài SQL",
+                    new
+                    {
+                        Type = ex.GetType().FullName,
+                        ex.Message,
+                        ex.StackTrace,
+                        request.FactorID,
+                        request.EntryID
+                    });
+                throw;
+            }
         }
 
         public async Task<JobStatusResponse> CheckJobStatusAsync(string referenceId, string factorId, string entryId)

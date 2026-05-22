@@ -31,17 +31,26 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHostedService<TokenCleanupWorker>();
+// EContractFileLogger là stateless + thread-safe → đăng ký Singleton thay vì Scoped
+// để mỗi prefix chỉ khởi tạo 1 lần/app lifetime (trước đó Scoped đẻ ra
+// 1 instance/request → init marker spam).
 builder.Services.AddSingleton<EContractFileLogger>();
-builder.Services.AddKeyedScoped<EContractFileLogger>("InvoiceLogger", (sp, _) =>
+builder.Services.AddKeyedSingleton<EContractFileLogger>("InvoiceLogger", (sp, _) =>
     new EContractFileLogger(
         configuration: builder.Configuration,
         filePrefix: "Invoice_craft"
     ));
 // Logger riêng cho flow Save Contract + Cấp tài khoản
-builder.Services.AddKeyedScoped<EContractFileLogger>("CreateAccountLogger", (sp, _) =>
+builder.Services.AddKeyedSingleton<EContractFileLogger>("CreateAccountLogger", (sp, _) =>
     new EContractFileLogger(
         configuration: builder.Configuration,
         filePrefix: "Contract_CreateAccount"
+    ));
+// Logger riêng cho flow Insert Job (sp_EContract_InsertJob_Full_v3)
+builder.Services.AddKeyedSingleton<EContractFileLogger>("JobInsertLogger", (sp, _) =>
+    new EContractFileLogger(
+        configuration: builder.Configuration,
+        filePrefix: "Job_Insert"
     ));
 //Config upload file
 var provider = new FileExtensionContentTypeProvider();

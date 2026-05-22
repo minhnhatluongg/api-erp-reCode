@@ -494,7 +494,7 @@ namespace ERP_Portal_RC.Application.Services
                 CmpnTel = req.CmpnTel,
                 CmpnMail = req.CmpnMail,
                 CmpnPeople_Sign = req.CmpnPeople_Sign,
-                CmpnPosition_BySign = req.CmpnPosition_Sign ?? "Giám Đốc", // Lưu ý: BySign
+                CmpnPosition_BySign = req.CmpnPosition_Sign ?? "Giám Đốc", 
                 CmpnBankAddress = req.CmpnBankAddress,
                 CmpnBankNumber = req.CmpnBankNumber,
                 FactorID = req.FactorID ?? "EContract",
@@ -581,8 +581,34 @@ namespace ERP_Portal_RC.Application.Services
         #endregion
         public async Task<ApiResponse<string>> ProcessSaveContractAsync(ContractPreviewRequest request, string userCode)
         {
-            var master = MapToMaster(request, userCode);
-            var details = MapToDetails(request);
+            await _accountLogger.LogInfoAsync(
+                request?.OrderCode ?? "<no-oid>",
+                "ENTER ProcessSaveContractAsync",
+                new
+                {
+                    UserCode = userCode,
+                    PartnerVat = request?.PartnerVat,
+                    OrderCode = request?.OrderCode,
+                    HasDetails = request?.Details?.Any() ?? false
+                });
+
+            EContractMaster master;
+            List<EContractDetails> details;
+            try
+            {
+                master = MapToMaster(request!, userCode);
+                details = MapToDetails(request!);
+            }
+            catch (Exception mapEx)
+            {
+                await _accountLogger.LogErrorAsync(
+                    request?.OrderCode ?? "<no-oid>",
+                    "MapToMaster/MapToDetails FAIL",
+                    new { Error = mapEx.Message, Type = mapEx.GetType().FullName });
+                return ApiResponse<string>.ErrorResponse(
+                    $"Lỗi map dữ liệu hợp đồng: {mapEx.Message}", 400);
+            }
+
             var oid = master.OID ?? string.Empty;
             var mst = (master.CusTax ?? string.Empty).Replace(" ", string.Empty);
 
@@ -598,7 +624,14 @@ namespace ERP_Portal_RC.Application.Services
             catch (Exception ex)
             {
                 await _accountLogger.LogErrorAsync(oid,
-                    "SaveFullContract FAIL", new { Error = ex.Message });
+                    "SaveFullContract FAIL",
+                    new
+                    {
+                        Error = ex.Message,
+                        Type = ex.GetType().FullName,
+                        Inner = ex.InnerException?.Message,
+                        StackTrace = ex.StackTrace
+                    });
                 return ApiResponse<string>.ErrorResponse($"Lỗi lưu hợp đồng: {ex.Message}", 500);
             }
 
