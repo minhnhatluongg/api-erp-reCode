@@ -102,6 +102,12 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<bool> InsertOrderBasicAsync(EContractIntegrationRequest model, string merchantId, string orderOid, string crtUser);
         Task<bool> OrderExistsAsync(string orderOid);
         Task<OwnerContract> GetOwnerContractAsync(string companyId = "26");
+
+        /// <summary>
+        /// Lấy danh sách sản phẩm/gói dịch vụ cho dropdown đơn hàng.
+        /// Gọi SP BosOnline..wspProducts_Tool_v25 — đã được port từ TVAN.
+        /// </summary>
+        Task<IEnumerable<ProductCatalogItem>> GetProductsCatalogAsync(ProductCatalogQuery query);
         Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID);
         Task<DeXuatCapTaiKhoanResult> DeXuatAsync(ProposeCreateAccount entity);
         /// <summary>Bypass cấp TK (captk): 0→101→201.</summary>

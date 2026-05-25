@@ -42,8 +42,8 @@ namespace ERP_Portal_RC.Application.Services
             _webAppBaseUrl = _config["WebApp:BaseUrl"] ?? "";
             _webAppUser = _config["WebApp:AuthUser"] ?? "";
             _webAppPassword = _config["WebApp:AuthPass"] ?? "";
-            _webAppPassword = _config["DbCredentials:User"] ?? "";
-            _webAppPassword = _config["DbCredentials:Password"] ?? "";
+            _dbCredUser = _config["DbCredentials:User"] ?? "";
+            _dbCredPassword = _config["DbCredentials:Password"] ?? "";
         }
         public async Task<CreateAccountResponseDto> CapTaiKhoanAsync(CreateAccountRequestDto request)
         {
