@@ -2272,6 +2272,35 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return result;
         }
 
+        /// <summary>
+        /// Gọi SP BosOnline..wspProducts_Tool_v25 lấy danh sách sản phẩm/gói dịch vụ
+        /// dùng cho dropdown đơn hàng. Port từ TVAN_WEB_API.OdooOrdersController.GetProducts.
+        /// </summary>
+        public async Task<IEnumerable<ProductCatalogItem>> GetProductsCatalogAsync(ProductCatalogQuery query)
+        {
+            query ??= new ProductCatalogQuery();
+
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+
+            var p = new DynamicParameters();
+            p.Add("@ClnID", query.ClnID ?? string.Empty);
+            p.Add("@ZoneID", query.ZoneID ?? string.Empty);
+            p.Add("@RegionID", query.RegionID ?? string.Empty);
+            p.Add("@ASM", query.ASM ?? string.Empty);
+            p.Add("@SUB", query.SUB ?? string.Empty);
+            p.Add("@TEAM", query.TEAM ?? string.Empty);
+            p.Add("@CustomerID", query.CustomerID ?? string.Empty);
+            p.Add("@MembType", query.MembType ?? string.Empty);
+            p.Add("@onlyTVAN", query.onlyTVAN);
+
+            var rows = await conn.QueryAsync<ProductCatalogItem>(
+                "BosOnline..wspProducts_Tool_v25",
+                p,
+                commandType: CommandType.StoredProcedure);
+
+            return rows;
+        }
+
         public async Task<bool> CheckOrderBySaleAsync(string cusTax, string saleEmID)
         {
             var connection = _dbConnectionFactory.GetConnection(BosOnline);

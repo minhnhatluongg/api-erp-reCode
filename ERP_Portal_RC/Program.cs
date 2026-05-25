@@ -143,6 +143,7 @@ builder.Services.AddScoped<IVirusScanService, ClamAvVirusScanService>();
 builder.Services.AddScoped<IVirusScanService, NoOpVirusScanService>();
 builder.Services.AddScoped<IChunkUploadService, ChunkUploadService>();
 builder.Services.AddScoped<IFileValidationService, FileValidationService>();
+builder.Services.AddScoped<IOdooOrderService, OdooOrderService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
