@@ -78,3 +78,6 @@ wwwroot/KyThuatMau/
 ## Deploy artifacts
 deploy/_publish/
 deploy/artifacts/
+/.claude/skills/gitnexus
+/AGENTS.md
+/CLAUDE.md
