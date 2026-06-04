@@ -144,6 +144,7 @@ builder.Services.AddScoped<IVirusScanService, NoOpVirusScanService>();
 builder.Services.AddScoped<IChunkUploadService, ChunkUploadService>();
 builder.Services.AddScoped<IFileValidationService, FileValidationService>();
 builder.Services.AddScoped<IOdooOrderService, OdooOrderService>();
+builder.Services.AddScoped<IIntegrationContractService, IntegrationContractService>();
 
 // Đăng ký Repositories
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
@@ -163,6 +164,7 @@ builder.Services.AddScoped<IWebhookRepository, WebhookRepository>();
 builder.Services.AddSingleton<WebhookFileLogger>();
 builder.Services.AddSingleton<IncomIntegrationFileLogger>();
 builder.Services.AddSingleton<ContractSignFileLogger>();
+builder.Services.AddSingleton<IntegrationContractFileLogger>();
 
 // ── Webhook Rate Limiting ────────────────────────────────────────────────────
 // Policy "webhook": 60 request/phút/IP, burst tối đa 10 đồng thời

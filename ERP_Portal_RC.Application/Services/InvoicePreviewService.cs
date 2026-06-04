@@ -10,6 +10,7 @@ using System.Linq;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Interfaces;
 using ERP_Portal_RC.Application.DTOs;
+using ERP_Portal_RC.Application.Services;
 
 namespace Interface.ReleaseInvoice.Services
 {
@@ -112,6 +113,8 @@ namespace Interface.ReleaseInvoice.Services
             rawXslt = ReplaceXsltPlaceholders(rawXslt, req);
             // 2.3. ÁP DỤNG TẤT CẢ RULES (Cố định & Custom từ React/Tool)
             string finalXslt = ApplyLegacyAndCustomRules(rawXslt, rules, req);
+            // 2.4. Gắn id ẩn/hiện (_NBxxx) + class viền vào THÂN XSLT để view = confirm = quick-publish.
+            finalXslt = InvoiceXsltConfigurator.InjectVisibilityHooks(finalXslt);
             // --- PHẦN 3: TẠO HTML ---
             string htmlOutput = XsltTransform(finalXml, finalXslt);
             // --- PHẦN 4: POST-PROCESS HTML (Replace placeholders còn lại) ---
@@ -173,24 +176,15 @@ namespace Interface.ReleaseInvoice.Services
                 sbCss.Append("\n.vienhd,.page{}");
             }
             
-            // 2. CSS ẨN/HIỆN (Fax, Email, Website, SĐT, Bank, Song ngữ)
-            if (!config.IsSongNgu) sbCss.Append("\n.en{display: none;}");
-            else sbCss.Append("\n.en{}");
-
-            if (!config.IsSoDT) sbCss.Append("\n#_NBSDT{display: none;}");
-            else sbCss.Append("\n#_NBSDT{}");
-
-            if (!config.IsFax) sbCss.Append("\n#_NBFax{display: none;}");
-            else sbCss.Append("\n#_NBFax{}");
-
-            if (!config.IsEmail) sbCss.Append("\n#_NBEmail{display: none;}");
-            else sbCss.Append("\n#_NBEmail{}");
-
-            if (!config.IsTaiKhoanNganHang) sbCss.Append("\n#_NBSTK{display: none;}");
-            else sbCss.Append("\n#_NBSTK{}");
-
-            if (!config.IsWebsite) sbCss.Append("\n#_NBWebsite{display: none;}");
-            else sbCss.Append("\n#_NBWebsite{}");
+            // 2. CSS ẨN/HIỆN (SĐT, Fax, Email, TK ngân hàng, Website, Song ngữ)
+            // Dùng !important để thắng rule gốc của mẫu (vd .en{display:none}) trên mọi hệ thống kết xuất.
+            // Bật song ngữ ⇒ phải override .en{display:none} mặc định của mẫu thành hiển thị.
+            sbCss.Append(config.IsSongNgu ? "\n.en{display:inline !important;}" : "\n.en{display:none !important;}");
+            sbCss.Append(config.IsSoDT ? "\n#_NBSDT{}" : "\n#_NBSDT{display:none !important;}");
+            sbCss.Append(config.IsFax ? "\n#_NBFax{}" : "\n#_NBFax{display:none !important;}");
+            sbCss.Append(config.IsEmail ? "\n#_NBEmail{}" : "\n#_NBEmail{display:none !important;}");
+            sbCss.Append(config.IsTaiKhoanNganHang ? "\n#_NBSTK{}" : "\n#_NBSTK{display:none !important;}");
+            sbCss.Append(config.IsWebsite ? "\n#_NBWebsite{}" : "\n#_NBWebsite{display:none !important;}");
 
             // 3. CSS VỊ TRÍ & KÍCH THƯỚC LOGO/BACKGROUND
             if (config.LogoPos != null)
@@ -321,6 +315,9 @@ namespace Interface.ReleaseInvoice.Services
 
             // 2.3. Áp dụng Rules
             string finalXslt = ApplyLegacyAndCustomRules(xsltWithPlaceholdersReplaced, rules, req);
+            // 2.4. Gắn id ẩn/hiện (_NBxxx) + class viền vào THÂN XSLT → ConfiguredXslt self-contained,
+            //      gửi sang quick-publish hiển thị GIỐNG HỆT bản xem trước (không mất ẩn/hiện & viền).
+            finalXslt = InvoiceXsltConfigurator.InjectVisibilityHooks(finalXslt);
 
             // --- PHẦN 3: TẠO HTML ---
             string htmlOutput = XsltTransform(finalXml, finalXslt);
@@ -518,10 +515,51 @@ namespace Interface.ReleaseInvoice.Services
         }
 
         #region HELPER METHODS
+        /// <summary>
+        /// Inject CSS vào XSLT một cách an toàn: nếu kết quả không còn well-formed thì TRẢ LẠI
+        /// XSLT gốc (không bao giờ làm hỏng mẫu → tránh 500 khi view/confirm).
+        /// </summary>
         private string SafeInjectCssIntoXslt(string xslt, string cssToInject)
         {
             if (string.IsNullOrEmpty(cssToInject)) return xslt;
-            
+
+            string result = SafeInjectCssIntoXsltCore(xslt, cssToInject);
+            return IsWellFormedXml(result) ? result : xslt;
+        }
+
+        /// <summary>Bọc CSS trong &lt;xsl:text&gt; (escape XML) để chèn vào XSLT luôn hợp lệ và xuất ra CSS thô.</summary>
+        private static string WrapCssAsXslText(string css)
+        {
+            string escaped = (css ?? "").Replace("&", "&amp;").Replace("<", "&lt;");
+            return "<xsl:text disable-output-escaping=\"yes\">\n" + escaped + "\n</xsl:text>";
+        }
+
+        /// <summary>Kiểm tra một chuỗi có phải XML well-formed (để không publish/transform XSLT hỏng).</summary>
+        private static bool IsWellFormedXml(string xml)
+        {
+            if (string.IsNullOrEmpty(xml)) return false;
+            try
+            {
+                var settings = new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Ignore,
+                    XmlResolver = null
+                };
+                using var sr = new StringReader(xml);
+                using var reader = XmlReader.Create(sr, settings);
+                while (reader.Read()) { }
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private string SafeInjectCssIntoXsltCore(string xslt, string cssToInject)
+        {
+            if (string.IsNullOrEmpty(cssToInject)) return xslt;
+
             // Clean CSS - remove any existing CDATA markers to avoid nesting
             cssToInject = cssToInject.Replace("<![CDATA[", "")
                                      .Replace("]]>", "")
@@ -580,19 +618,28 @@ namespace Interface.ReleaseInvoice.Services
                     System.Text.RegularExpressions.RegexOptions.Singleline);
             }
             
-            // Method 4: Simple fallback - find </style> and inject before it (no xsl:text wrapper to avoid nesting)
-            // This only works if the XSLT doesn't have xsl:text at all
-            if (xslt.Contains("<style") && xslt.Contains("</style>") && !xslt.Contains("<xsl:text"))
+            // Method 4 (universal): chèn CSS thẳng vào TRƯỚC </style> cuối cùng.
+            // CSS sinh ra (display/border-image/url) không chứa '<' hay '&' nên an toàn với XML;
+            // và </style> luôn nằm TRƯỚC <xsl:text> của <script> nên không lồng thẻ.
+            // (Bản cũ bỏ qua nhánh này khi XSLT có <xsl:text> ⇒ mẫu như 118 KHÔNG được inject CSS,
+            //  khiến ẩn/hiện + viền biến mất sau khi publish.)
+            if (xslt.Contains("</style>"))
             {
                 int lastStylePos = xslt.LastIndexOf("</style>");
                 if (lastStylePos > 0)
                 {
-                    // Wrap in xsl:text since there's no existing xsl:text
-                    string wrappedCss = "<xsl:text disable-output-escaping=\"yes\">\n" + cssToInject + "\n</xsl:text>";
-                    return xslt.Insert(lastStylePos, wrappedCss);
+                    return xslt.Insert(lastStylePos, "\n" + WrapCssAsXslText(cssToInject) + "\n");
                 }
             }
-            
+
+            // Không có <style> → tạo mới ngay trước </head>.
+            if (xslt.Contains("</head>"))
+            {
+                int headPos = xslt.LastIndexOf("</head>");
+                if (headPos > 0)
+                    return xslt.Insert(headPos, "<style type=\"text/css\">\n" + WrapCssAsXslText(cssToInject) + "\n</style>\n");
+            }
+
             // If all else fails, return unchanged to avoid breaking XSLT
             return xslt;
         }

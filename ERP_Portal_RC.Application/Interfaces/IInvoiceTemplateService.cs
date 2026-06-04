@@ -19,6 +19,16 @@ namespace ERP_Portal_RC.Application.Interfaces
         Task<string?> GetRawXsltAsync(int templateId);
 
         /// <summary>
+        /// Lấy XSLT theo TemplateID kèm cấu hình ẩn/hiện + viền dò được từ file mẫu (cho FE tick checkbox).
+        /// </summary>
+        Task<InvoiceTemplateXsltDto?> GetTemplateXsltAsync(int templateId);
+
+        /// <summary>
+        /// Dò cấu hình ẩn/hiện + viền từ một nội dung XSLT bất kỳ (vd file người dùng tự upload).
+        /// </summary>
+        AdjustConfigDto DetectConfig(string? rawXslt);
+
+        /// <summary>
         /// Lấy thông tin mẫu kèm XSLT đã decode theo TemplateCode.
         /// </summary>
         Task<InvoiceTemplateXsltDto?> GetTemplateByCodeAsync(string templateCode);

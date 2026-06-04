@@ -88,6 +88,24 @@ namespace ERP_Portal_RC.Application.Services
             return DecodeFromDb(tpl.InvoiceContent);
         }
 
+        public async Task<InvoiceTemplateXsltDto?> GetTemplateXsltAsync(int templateId)
+        {
+            var tpl = await _templates.GetByIdAsync(templateId);
+            if (tpl == null) return null;
+
+            var raw = DecodeFromDb(tpl.InvoiceContent);
+            return new InvoiceTemplateXsltDto
+            {
+                TemplateID = tpl.TemplateID,
+                TemplateCode = tpl.TemplateCode,
+                TemplateName = tpl.TemplateName,
+                RawXslt = raw,
+                DetectedConfig = InvoiceXsltConfigurator.Detect(raw)
+            };
+        }
+
+        public AdjustConfigDto DetectConfig(string? rawXslt) => InvoiceXsltConfigurator.Detect(rawXslt);
+
         public async Task<InvoiceTemplateXsltDto?> GetTemplateByCodeAsync(string templateCode)
         {
             if (string.IsNullOrWhiteSpace(templateCode)) return null;
@@ -95,12 +113,14 @@ namespace ERP_Portal_RC.Application.Services
             var tpl = await _templates.GetByCodeAsync(templateCode);
             if (tpl == null) return null;
 
+            var raw = DecodeFromDb(tpl.InvoiceContent);
             return new InvoiceTemplateXsltDto
             {
                 TemplateID = tpl.TemplateID,
                 TemplateCode = tpl.TemplateCode,
                 TemplateName = tpl.TemplateName,
-                RawXslt = DecodeFromDb(tpl.InvoiceContent)
+                RawXslt = raw,
+                DetectedConfig = InvoiceXsltConfigurator.Detect(raw)
             };
         }
 

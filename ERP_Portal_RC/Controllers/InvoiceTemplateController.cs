@@ -1,3 +1,4 @@
+using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.DTOs.InvoiceTemplate;
 using ERP_Portal_RC.Application.Interfaces;
 using ERP_Portal_RC.Domain.Common;
@@ -69,18 +70,12 @@ namespace API.ERP_Portal_RC.Controllers
 
             try
             {
-                var xslt = await _templateService.GetRawXsltAsync(templateId);
-                if (xslt == null)
+                var dto = await _templateService.GetTemplateXsltAsync(templateId);
+                if (dto == null)
                 {
                     _logger.LogWarning("[InvoiceTemplate] Not found ID={Id}", templateId);
                     return NotFound(ApiResponse.ErrorResponse("Không tìm thấy mẫu hóa đơn với ID này.", 404));
                 }
-
-                var dto = new InvoiceTemplateXsltDto
-                {
-                    TemplateID = templateId,
-                    RawXslt = xslt
-                };
 
                 return Ok(ApiResponse<InvoiceTemplateXsltDto>.SuccessResponse(dto, "Lấy nội dung mẫu thành công."));
             }
@@ -123,6 +118,20 @@ namespace API.ERP_Portal_RC.Controllers
                 _logger.LogError(ex, "[InvoiceTemplate] GetByCode={Code} error, traceId={TraceId}", templateCode, traceId);
                 return StatusCode(500, ApiResponse.ErrorResponse($"Lỗi hệ thống: {ex.Message}", 500));
             }
+        }
+
+        /// <summary>
+        /// Dò cấu hình ẩn/hiện + viền từ một file XSLT người dùng tự upload (để FE tick checkbox đúng 100%).
+        /// </summary>
+        [HttpPost("detect-config")]
+        [ProducesResponseType(typeof(ApiResponse<AdjustConfigDto>), 200)]
+        public IActionResult DetectConfig([FromBody] DetectTemplateConfigRequest body)
+        {
+            if (body == null || string.IsNullOrWhiteSpace(body.RawXslt))
+                return BadRequest(ApiResponse.ErrorResponse("Thiếu nội dung XSLT (rawXslt)."));
+
+            var cfg = _templateService.DetectConfig(body.RawXslt);
+            return Ok(ApiResponse<AdjustConfigDto>.SuccessResponse(cfg, "Dò cấu hình mẫu thành công."));
         }
     }
 }
