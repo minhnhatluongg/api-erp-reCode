@@ -30,10 +30,21 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         /// <summary>
-        /// API Đăng Kí Tài Khoản Sale - LOT ERP
+        /// Đăng ký nhân sự Sale (LOT / ERP) và tuỳ chọn tạo tài khoản đăng nhập.
         /// </summary>
-        /// <param name="request"></param>
-        /// <returns></returns>
+        /// <remarks>
+        /// Cách điền input:
+        /// <list type="bullet">
+        ///   <item><c>FullName</c>, <c>Email</c>, <c>ManagerEmplID</c>, <c>SoCMND</c>: BẮT BUỘC.</item>
+        ///   <item><c>ManagerEmplID</c>: mã quản lý trực tiếp (để gắn vào cây ASM, thiếu thì không thấy hợp đồng).</item>
+        ///   <item><c>IsCreateAccount = false</c>: chỉ thêm nhân sự, không cần <c>LoginName</c>/<c>Password</c>.</item>
+        ///   <item><c>IsCreateAccount = true</c>: phải có <c>LoginName</c> (≥5 ký tự) và <c>Password</c> (≥6 ký tự)
+        ///         để tạo tài khoản đăng nhập.</item>
+        ///   <item><c>PsID</c>, <c>Phone</c>: tuỳ chọn.</item>
+        /// </list>
+        /// </remarks>
+        /// <param name="request">Thông tin đăng ký nhân sự Sale.</param>
+        /// <returns>Mã nhân sự mới + tài khoản (nếu có) trong <see cref="RegistrationResultDto"/>.</returns>
         [HttpPost("register")]
         public async Task<IActionResult> RegisterSale([FromBody] SaleRegistrationModel request)
         {

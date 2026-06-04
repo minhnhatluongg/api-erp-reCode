@@ -16,7 +16,9 @@ namespace API.ERP_Portal_RC.Controllers
     ///   - GET /api/odoo/orders/owner-info    → thông tin công ty chủ quản (Bên B)
     /// Các endpoint khác trong TVAN (create-order, createAccount, quick-publish ...) KHÔNG port.
     /// </summary>
-    [Authorize]
+    //[Authorize]
+
+    [AllowAnonymous]
     [ApiController]
     [Route("api/odoo/orders")]
     public class OdooOrdersController : ControllerBase
