@@ -12,7 +12,10 @@ namespace API.ERP_Portal_RC.Controllers
 
         public FileController(IConfiguration configuration)
         {
-            _basePath = configuration["FileConfig:PhysicalRootPath"] ?? @"D:\Attachments";
+            // THỐNG NHẤT: dùng chung FileUpload:PhysicalRootPath với FileUploadController/FileStorageService
+            // (FileConfig đã bị xóa khỏi cấu hình).
+            _basePath = configuration["FileUpload:PhysicalRootPath"]
+                        ?? @"D:\IIS WEB\api-erprc.win-tech.vn\wwwroot\Attachments";
         }
 
         [HttpGet("{**filePath}")]

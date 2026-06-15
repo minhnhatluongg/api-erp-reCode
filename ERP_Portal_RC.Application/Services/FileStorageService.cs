@@ -153,7 +153,8 @@ namespace ERP_Portal_RC.Domain.Interfaces
                 FileName = fileName,
                 OriginalName = file.FileName,
                 RelativePath = Path.Combine(relDir, fileName).Replace("\\", "/"),
-                Url = $"{baseUrl.TrimEnd('/')}/uploads/{relDir.Replace("\\", "/")}/{fileName}",
+                // THỐNG NHẤT: phục vụ file qua FileController /files/{relativePath} (full URL public lưu DB)
+                Url = $"{baseUrl.TrimEnd('/')}/files/{relDir.Replace("\\", "/")}/{fileName}",
                 SizeBytes = file.Length,
                 Extension = Path.GetExtension(file.FileName).ToLowerInvariant(),
                 UploadedAt = uploadedAt,
@@ -203,7 +204,7 @@ namespace ERP_Portal_RC.Domain.Interfaces
                         FileName = info.Name,
                         OriginalName = info.Name, 
                         RelativePath = rel,
-                        Url = $"{baseUrl.TrimEnd('/')}/uploads/{rel}",
+                        Url = $"{baseUrl.TrimEnd('/')}/files/{rel}",
                         SizeBytes = info.Length,
                         Extension = info.Extension.ToLowerInvariant(),
                         UploadedAt = info.CreationTime,

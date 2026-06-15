@@ -318,7 +318,7 @@ namespace API.ERP_Portal_RC.Controllers
                         {
                             FileName     = info.Name,
                             OriginalName = info.Name,
-                            Url          = $"{baseUrl.TrimEnd('/')}/uploads/{relFromUploads}",
+                            Url          = $"{baseUrl.TrimEnd('/')}/files/{relFromUploads}",
                             Extension    = ext,
                             SizeBytes    = info.Length,
                             UploadedAt   = info.CreationTime,
@@ -599,7 +599,7 @@ namespace API.ERP_Portal_RC.Controllers
                     {
                         FileName     = info.Name,
                         OriginalName = info.Name,
-                        Url          = $"{baseUrl.TrimEnd('/')}/uploads/{relFromUploads2}",
+                        Url          = $"{baseUrl.TrimEnd('/')}/files/{relFromUploads2}",
                         Extension    = ext2,
                         SizeBytes    = info.Length,
                         UploadedAt   = info.CreationTime,
@@ -624,12 +624,10 @@ namespace API.ERP_Portal_RC.Controllers
         private string BuildUrl(string relativePath)
         {
             var path = relativePath.Replace("\\", "/").TrimStart('/');
-            if (path.StartsWith("uploads/"))
-            {
-                path = path.Substring("uploads/".Length);
-            }
+            if (path.StartsWith("uploads/")) path = path.Substring("uploads/".Length);
+            if (path.StartsWith("files/"))   path = path.Substring("files/".Length);
 
-            return $"{_config.BaseUrl.TrimEnd('/')}/uploads/{path}";
+            return $"{_config.BaseUrl.TrimEnd('/')}/files/{path}";
         }
 
     }

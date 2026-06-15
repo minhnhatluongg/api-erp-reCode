@@ -37,7 +37,6 @@ namespace ERP_Portal_RC.Application.Services
         private readonly IEContractRepository _eContractRepository;
         private readonly IMailService _mailService;
         private readonly IFileStorageService _fileStorageService;
-        private readonly FileConfig _fileConfig;
         private readonly IConnectionRepository _connectionRepo;
         private readonly IConfiguration _configuration;
         private readonly ICapTaiKhoanService _capTaiKhoanService;
@@ -48,7 +47,6 @@ namespace ERP_Portal_RC.Application.Services
             IFileStorageService fileStorageService,
             IConnectionRepository connectionRepository,
             IConfiguration configuration,
-            IOptions<FileConfig> fileConfigOptions,
             ICapTaiKhoanService capTaiKhoanService,
             [FromKeyedServices("CreateAccountLogger")] EContractFileLogger accountLogger)
         {
@@ -57,7 +55,6 @@ namespace ERP_Portal_RC.Application.Services
             _fileStorageService = fileStorageService;
             _configuration = configuration;
             _connectionRepo = connectionRepository;
-            _fileConfig = fileConfigOptions.Value;
             _capTaiKhoanService = capTaiKhoanService;
             _accountLogger = accountLogger;
         }
@@ -1036,6 +1033,7 @@ namespace ERP_Portal_RC.Application.Services
                 AppvMess = h.appvMess,
                 FullName = h.FullName,
                 Crt_Date = h.Crt_Date,
+                SignDate = h.currSignDate,   // ngày ký thực tế — hiển thị ở mốc 301 (kế toán ký) / 501 (khách ký)
                 ExcHost = h.excHost,
             }).ToList();
 
@@ -1464,7 +1462,7 @@ namespace ERP_Portal_RC.Application.Services
             IFormFileCollection files, string oid, CancellationToken ct)
         {
             var fileLinks = new List<string>();
-            string baseUrl = _configuration["FileConfig:BaseUrl"];
+            string baseUrl = _configuration["FileUpload:BaseUrl"] ?? "";
 
             foreach (var file in files)
             {
@@ -1472,7 +1470,8 @@ namespace ERP_Portal_RC.Application.Services
                 if (relativePath != null)
                 {
                     string normalizedPath = relativePath.TrimStart('/')
-                                                       .Replace("uploads/", "");
+                                                       .Replace("uploads/", "")
+                                                       .Replace("files/", "");
                     string fullUrl = $"{baseUrl.TrimEnd('/')}/files/{normalizedPath}";
                     fileLinks.Add(fullUrl);
                 }
@@ -1738,15 +1737,23 @@ namespace ERP_Portal_RC.Application.Services
 
             if (resultRaw.ListFiles != null)
             {
+                string fileBaseUrl = (_configuration["FileUpload:BaseUrl"] ?? "").TrimEnd('/');
                 result.ListFiles = resultRaw.ListFiles.Select(f => new ERP_Portal_RC.Application.DTOs.ListFile
                 {
                     AttachFile = f.AttachFile,
                     Crt_User = f.Crt_User,
                     LinkFonder = f.LinkFonder,
                     isdisable = (f.Crt_User != userCode),
-                    url = string.IsNullOrEmpty(f.LinkFonder)
-                        ? $"{_fileConfig.FileUpload}{f.AttachFile}"
-                        : $"{_fileConfig.FileUpload}{f.LinkFonder}/{f.AttachFile}"
+                    // AttachFile / LinkFonder nay có thể là full URL (/files/...) → dùng thẳng;
+                    // data cũ (tên file + folder tương đối) thì ghép {BaseUrl}/files/...
+                    url =
+                        (!string.IsNullOrEmpty(f.AttachFile) && f.AttachFile.StartsWith("http", System.StringComparison.OrdinalIgnoreCase))
+                            ? f.AttachFile
+                        : (!string.IsNullOrEmpty(f.LinkFonder) && f.LinkFonder.StartsWith("http", System.StringComparison.OrdinalIgnoreCase))
+                            ? $"{f.LinkFonder.TrimEnd('/')}/{f.AttachFile}"
+                        : string.IsNullOrEmpty(f.LinkFonder)
+                            ? $"{fileBaseUrl}/files/{f.AttachFile}"
+                            : $"{fileBaseUrl}/files/{f.LinkFonder}/{f.AttachFile}"
                 }).ToList();
             }
 
@@ -1840,13 +1847,17 @@ namespace ERP_Portal_RC.Application.Services
         public async Task<ApiResponse<IEnumerable<object>>> GetAttachmentsByOidAsync(string oid)
         {
             var rawFiles = await _eContractRepository.GetRawAttachmentsByOidAsync(oid);
-            var baseUrl = _configuration["FileConfig:BaseUrl"];
+            var baseUrl = (_configuration["FileUpload:BaseUrl"] ?? "").TrimEnd('/');
             var formattedFiles = rawFiles.Select(f => new {
                 AttachID = f.AttachID,
                 FileName = f.AttachFile,
                 Note = f.AttachNote,
                 AttachDate = f.AttachDate,
-                ViewUrl = $"{baseUrl}/{f.LinkFile}" 
+                // LinkFile nay lưu full URL (/files/...) → dùng thẳng; data cũ tương đối thì ghép.
+                ViewUrl = (!string.IsNullOrEmpty((string)f.LinkFile) &&
+                           ((string)f.LinkFile).StartsWith("http", System.StringComparison.OrdinalIgnoreCase))
+                          ? (string)f.LinkFile
+                          : $"{baseUrl}/files/{(((string)f.LinkFile) ?? "").TrimStart('/')}"
             });
             return ApiResponse<IEnumerable<object>>.SuccessResponse(formattedFiles, "Lấy danh sách file thành công.");
         }
@@ -2110,8 +2121,6 @@ namespace ERP_Portal_RC.Application.Services
             string crtUser = userCode;// (resultMenu?.mode == 1 || request.IsUser == "1") ? userCode : "%";
             var decodedOID = "";
 
-            ListEcontractViewModel result;
-
             if (!string.IsNullOrEmpty(request.OIDSearch) && request.OIDSearch != "null")
             {
                 decodedOID = Uri.UnescapeDataString(request.OIDSearch);
@@ -2119,54 +2128,33 @@ namespace ERP_Portal_RC.Application.Services
 
             string decodedSaleFilter = (string.IsNullOrEmpty(request.EmplChild) || request.EmplChild == "null") ? "" : request.EmplChild;
 
-            if (request.Page == null)
-            {
-                // Gán giá trị mặc định nếu người dùng không gửi gì lên
-                request.PageSize = 1;
-            }
 
-            if (request.PageSize == null)
-            {
-                // Gán giá trị mặc định nếu người dùng không gửi gì lên
-                request.PageSize = 100;
-            }
+            // Trạng thái ký do FE truyền: 101 = chờ ký, 301 = kế toán đã ký, 501 = khách đã ký.
+            // Parse được → lọc NGAY tại SP qua @StatusFilter; rỗng/"null" → trả tất cả.
+            int? statusFilter = (!string.IsNullOrWhiteSpace(request.Status)
+                                 && request.Status != "null"
+                                 && int.TryParse(request.Status, out int statusInt))
+                                ? statusInt : (int?)null;
 
+            int page = request.Page <= 0 ? 1 : request.Page;
+            bool getAll = request.PageSize == -1;
+            int pageSize = getAll ? request.PageSize : (request.PageSize <= 0 ? 10 : request.PageSize);
 
+            // SP wspList_EContracts_PagedV26ASM_FIX lọc @StatusFilter + phân trang luôn
+            // (RowNum + TotalCount OVER()). Không lọc/phân trang lại ở C# để tránh lệch trang & sai TotalCount.
             var (data, subEmpl) = await _eContractRepository.GetPagedAsync_FilterBySale(
                     crtUser: userCode,
                     frm: dateFrom,
                     end: dateTo,
                     search: decodedOID,
                     SaleFilter: decodedSaleFilter,
-                    statusFilter: null,
-                    page: request.Page,
-                    pageSize: request.PageSize
+                    statusFilter: statusFilter,
+                    page: getAll ? 1 : page,
+                    pageSize: getAll ? 1000000 : pageSize
                 );
-            result = new ListEcontractViewModel { lstMonitor = data?.ToList() };
 
-
-            if (result?.lstMonitor == null) return new EContractPagedResponsePage
-            {
-                TotalCount = 0,
-                Page = 0,
-                PageSize = 0
-            };
-
-            var filteredQuery = result.lstMonitor.AsEnumerable();
-            if (!string.IsNullOrWhiteSpace(request.Status) && int.TryParse(request.Status, out int statusInt))
-            {
-                filteredQuery = filteredQuery.Where(x => x.CurrSignNumb == statusInt);
-            }
-
-            // 5. Phân trang (Pagination)
-            int totalRecords = filteredQuery.Count();
-            int pageSize = request.PageSize;
-            int page = request.Page;
-            int offset = (page - 1) * pageSize;
-
-            var pagedList = (pageSize == -1)
-                ? filteredQuery.ToList()
-                : filteredQuery.Skip(offset).Take(pageSize).ToList();
+            var pagedList = data?.ToList() ?? new List<EContract_Monitor>();
+            int totalRecords = pagedList.Count > 0 ? pagedList[0].TotalCount : 0;
 
             if (pagedList.Any())
             {
@@ -2192,11 +2180,11 @@ namespace ERP_Portal_RC.Application.Services
 
             return new EContractPagedResponsePage
             {
-                Data = result.lstMonitor,
-                SubEmpl = subEmpl.ToList(),
+                Data = pagedList,
+                SubEmpl = subEmpl?.ToList() ?? new List<SubEmpl>(),
                 TotalCount = totalRecords,
                 Page = page,
-                PageSize = pageSize
+                PageSize = request.PageSize
             };
         }
     }
