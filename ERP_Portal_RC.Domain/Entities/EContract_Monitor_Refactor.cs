@@ -39,7 +39,19 @@ namespace ERP_Portal_RC.Domain.Entities
         public bool isGiaHan { get; set; }
         public bool isCapBu { get; set; }
 
-        //Paged 
+        // Trạng thái ký — lấy từ BosControlEVAT.dbo.ECtr_PublicInfo (join InvcCode = OID)
+        /// <summary>true nếu OID đã có bản ghi trong ECtr_PublicInfo (đã ký).</summary>
+        public bool IsSign { get; set; } = false;
+        /// <summary>InvcCode bên ECtr_PublicInfo — chỉ có giá trị khi IsSign = true.</summary>
+        public string? Public_InvcCode { get; set; }
+        /// <summary>Ngày + giờ ký (Crt_Date của ECtr_PublicInfo) — null nếu chưa ký.</summary>
+        public DateTime? Sign_Crt_Date { get; set; }
+        /// <summary>Bên A đã ký?</summary>
+        public bool Is_Party_A_Sign { get; set; } = false;
+        /// <summary>Bên B đã ký?</summary>
+        public bool Is_Party_B_Sign { get; set; } = false;
+
+        //Paged
         public int TotalCount { get; set; }
         public int RowNum { get; set; }
     }

@@ -160,6 +160,13 @@ namespace API.ERP_Portal_RC.Controllers
         ///   <li><b>TT4</b> — Trạng thái phát hành hóa đơn.</li>
         ///   <li><b>TT8</b> — Trạng thái xuất hóa đơn điện tử (HĐĐT).</li>
         /// </ul>
+        /// <b>Trạng thái ký (từ ECtr_PublicInfo):</b>
+        /// <ul>
+        ///   <li><b>isSign</b> — true nếu HĐ đã có bản ghi ký trong ECtr_PublicInfo.</li>
+        ///   <li><b>public_InvcCode</b> — InvcCode (chỉ có khi isSign = true).</li>
+        ///   <li><b>sign_Crt_Date</b> — ngày + giờ ký (null nếu chưa ký).</li>
+        ///   <li><b>is_Party_A_Sign / is_Party_B_Sign</b> — Bên A / Bên B đã ký hay chưa.</li>
+        /// </ul>
         /// </remarks>
         /// <param name="fromDate">Từ ngày (yyyy-MM-dd). Mặc định: 30 ngày trước.</param>
         /// <param name="toDate">Đến ngày (yyyy-MM-dd). Mặc định: hôm nay.</param>

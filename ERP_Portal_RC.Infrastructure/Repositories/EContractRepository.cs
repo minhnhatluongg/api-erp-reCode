@@ -1851,14 +1851,22 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
 
             var files = await conn.QueryAsync<dynamic>(sql, new { OID = oid });
 
-            var baseUrl = _configuration["FileConfig:BaseUrl"]; // https://api-erprc.win-tech.vn/uploads
+            // LinkFile trong DocAttachfile nay LƯU FULL URL (/files/...) → dùng thẳng;
+            // chỉ ghép baseUrl khi là đường dẫn tương đối (data cũ).
+            var baseUrl = (_configuration["FileUpload:BaseUrl"] ?? "").TrimEnd('/');
             return files.Select(f => new
             {
                 f.FileName,
                 f.Note,
-                ViewUrl = $"{baseUrl}/{f.RelativePath}"
+                ViewUrl = IsFullUrl((string)f.RelativePath)
+                          ? (string)f.RelativePath
+                          : $"{baseUrl}/files/{((string)f.RelativePath ?? "").TrimStart('/')}"
             });
         }
+
+        private static bool IsFullUrl(string s)
+            => !string.IsNullOrEmpty(s) && (s.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                                         || s.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
 
         public async Task<string> GetNextJobOIDAsync(string mainOid)
         {
@@ -2065,10 +2073,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
         public async Task<IEnumerable<object>> GetAttachmentsByOidAsync(string oid)
         {
             using var conn = _dbConnectionFactory.GetConnection(BosDocument);
-            var baseUrl = _configuration["FileConfig:BaseUrl"];
+            var baseUrl = (_configuration["FileUpload:BaseUrl"] ?? "").TrimEnd('/');
 
             const string sql = @"
-                SELECT AttachID, AttachFile as FileName, AttachNote as Note, 
+                SELECT AttachID, AttachFile as FileName, AttachNote as Note,
                        LinkFile as RelativePath, AttachDate
                 FROM [BosDocument].[dbo].[DocAttachfile]
                 WHERE OID = @OID
@@ -2082,7 +2090,10 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 f.FileName,
                 f.Note,
                 f.AttachDate,
-                ViewUrl = $"{baseUrl}/{f.RelativePath}"
+                // LinkFile nay lưu full URL (/files/...) → dùng thẳng; data cũ tương đối thì ghép baseUrl.
+                ViewUrl = IsFullUrl((string)f.RelativePath)
+                          ? (string)f.RelativePath
+                          : $"{baseUrl}/files/{((string)f.RelativePath ?? "").TrimStart('/')}"
             });
         }
 

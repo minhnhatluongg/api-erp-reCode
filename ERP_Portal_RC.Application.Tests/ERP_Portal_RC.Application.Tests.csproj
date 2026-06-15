@@ -23,6 +23,10 @@
     <!-- Logger abstraction cho các service có ILogger<T> -->
 	  <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
 
+    <!-- Configuration: tạo IConfiguration in-memory cho test (GhostContractOptions + log path) -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.3" />
+
     <!-- Code coverage -->
     <PackageReference Include="coverlet.collector" Version="6.0.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

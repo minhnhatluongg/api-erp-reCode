@@ -56,6 +56,8 @@ namespace ERP_Portal_RC.Domain.Entities
         public string?   AppvMess    { get; set; }
         public string?   FullName    { get; set; }
         public DateTime? Crt_Date    { get; set; }
+        /// <summary>Ngày ký thực tế (SignDate). Có giá trị ở mốc 301 (kế toán ký) / 501 (khách ký).</summary>
+        public DateTime? SignDate    { get; set; }
         public string?   ExcHost     { get; set; }
     }
 

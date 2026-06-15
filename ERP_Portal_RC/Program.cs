@@ -115,8 +115,7 @@ builder.Services.AddHttpClient("HRAccountClient", client =>
     client.DefaultRequestHeaders.Add("X-API-Key", builder.Configuration["HRAccountApi:ApiKey"]);
 });
 
-// Đăng ký cấu hình FileConfig
-builder.Services.Configure<FileConfig>(builder.Configuration.GetSection("FileConfig"));
+// FileConfig đã bỏ — thống nhất dùng FileUpload:* cho mọi cấu hình file (upload + get qua /files).
 // Đăng ký Application Services
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.AddScoped<IMailService, MailService>();
@@ -356,10 +355,15 @@ if (!Directory.Exists(uploadPath))
 {
     Directory.CreateDirectory(uploadPath);
 }
+// CHÍNH THỨC: phục vụ file qua FileController route "/files/{**path}" (đọc FileUpload:PhysicalRootPath).
+// URL mới sinh ra đều dạng {BaseUrl}/files/... và lưu full URL xuống DocAttachfile.LinkFile.
+//
+// Giữ static "/uploads" SONG SONG (cùng physical root) để các LinkFile CŨ trong DB (dạng /uploads/...)
+// vẫn truy cập được — không phá dữ liệu lịch sử.
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadPath),
-    RequestPath = "/uploads", 
+    RequestPath = "/uploads",
     ContentTypeProvider = provider,
     ServeUnknownFileTypes = true,
     OnPrepareResponse = ctx =>

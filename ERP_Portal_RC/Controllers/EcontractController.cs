@@ -606,13 +606,15 @@ namespace API.ERP_Portal_RC.Controllers
             return Ok(response);
         }
         /// <summary>
-        /// Upload file đính kèm hợp đồng (không giới hạn kích thước).
+        /// [DEPRECATED] Upload file đính kèm hợp đồng — KHÔNG dùng nữa.
+        /// Dùng thống nhất POST /api/files/upload (FileUploadController): có JWT auth,
+        /// validate MIME/size, folder {userCode}_{oid}, trả metadata đầy đủ (url /files + uploadedBy).
+        /// Endpoint này giữ lại tạm cho tương thích cũ, sẽ gỡ sau.
         /// </summary>
-        /// <param name="files"></param>
-        /// <param name="oid"></param>
-        /// <returns></returns>
         [HttpPost("upload-files")]
         [DisableRequestSizeLimit]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [Obsolete("Dùng POST /api/files/upload thay thế.")]
         public async Task<IActionResult> UploadFiles(IFormFileCollection files, [FromQuery] string oid, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(oid))
