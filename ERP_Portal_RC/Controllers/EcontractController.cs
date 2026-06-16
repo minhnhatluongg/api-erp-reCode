@@ -459,6 +459,25 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         /// <summary>
+        /// Sale ĐỀ XUẤT GỠ KÝ hợp đồng đã ký (SignNumb >= 301), kèm lý do.
+        /// Lưu vào hàng đợi ECtr_UnsignRequests (PENDING) chờ kế toán duyệt.
+        /// Người đề xuất lấy từ token (UserCode / FullName).
+        /// </summary>
+        [HttpPost("unsign-request")]
+        public async Task<IActionResult> CreateUnsignRequest([FromBody] UnsignProposalDto request)
+        {
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userCode))
+                return Unauthorized(ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin định danh người dùng", 401));
+
+            var fullName = User.FindFirst("FullName")?.Value ?? string.Empty;
+
+            var result = await _econtractService.CreateUnsignRequestAsync(request, userCode, fullName);
+
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode == 200 ? 400 : result.StatusCode, result);
+        }
+
+        /// <summary>
         /// Lấy lịch sử các job xử lý theo OID hợp đồng.
         /// </summary>
         /// <param name="oid"></param>

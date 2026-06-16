@@ -48,9 +48,20 @@ namespace ERP_Portal_RC.Application.Services
         public async Task<CreateAccountResponseDto> CapTaiKhoanAsync(CreateAccountRequestDto request)
         {
             var result = new CreateAccountResponseDto();
-            string mst = request.MaSoThue.Replace(" ", "");
 
-            _logger.LogInformation("[CapTK] Bắt đầu — MST={MST}", mst);
+            // Cá nhân/hộ kinh doanh có thể KHÔNG có MST 10 số → dùng CCCD làm định danh thuế.
+            // Toàn bộ các bước phía dưới (GetServerInfo, ImportTools, init_cmpn) đều dùng biến `mst` này.
+            string mst = (request.MaSoThue ?? "").Replace(" ", "");
+            if (string.IsNullOrWhiteSpace(mst))
+                mst = (request.CMND_CCCD ?? "").Replace(" ", "");
+            if (string.IsNullOrWhiteSpace(mst))
+            {
+                result.Message = "Cần nhập Mã số thuế hoặc CCCD/CMND.";
+                result.ErrorDetail = "MaSoThue và CMND_CCCD đều rỗng.";
+                return result;
+            }
+
+            _logger.LogInformation("[CapTK] Bắt đầu — Định danh={MST}", mst);
 
             // ── Bước 1: CHECK ─────────────────────────────────────────────────
             var checkResult = await StepCheckAsync(mst, request.CMND_CCCD, result);

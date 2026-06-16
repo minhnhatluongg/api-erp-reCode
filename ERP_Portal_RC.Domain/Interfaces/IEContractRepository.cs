@@ -64,6 +64,8 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId);
         // Nghiệp vụ rút trình ký — chỉ cho phép khi chưa có SignNumb 301/501
         Task<(bool Success, string Message, object Data)> RutTrinhKyAsync(UnSignRequest model, string correlationId);
+        // Đề xuất gỡ ký — sale tạo đề xuất (hàng đợi chờ kế toán duyệt)
+        Task<(long RequestId, int Ok, string Message)> CreateUnsignRequestAsync(string oid, string reason, string requestedBy, string requestedByName);
         //Nghiệp vụ lịch sử Job 
         Task<EContractHistoryRaw> GetFullHistoryDataAsync(string oid);
         Task<List<JobEntity>> GetJobKTbyOID(string oid);

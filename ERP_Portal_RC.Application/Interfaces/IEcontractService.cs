@@ -57,6 +57,8 @@ namespace ERP_Portal_RC.Application.Interfaces
         /// Rút trình ký — chỉ cho phép khi hợp đồng đang ở SignNumb 101 và chưa có 301/501.
         /// </summary>
         Task<ApiResponse<object>> RutTrinhKyAsync(UnSignRequest model);
+        /// <summary>Sale đề xuất gỡ ký hợp đồng đã ký (kèm lý do) — chờ kế toán duyệt.</summary>
+        Task<ApiResponse<object>> CreateUnsignRequestAsync(UnsignProposalDto dto, string userCode, string fullName);
         // Lấy lịch sử Job của hợp đồng
         Task<ApiResponse<EContractHistoryResponse>> GetJobHistoryAsync(string oid);
         //Check yêu cầu kiểm tra của kd/sale.

@@ -977,6 +977,24 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return (p.Get<int>("@OK"), p.Get<string>("@Message"));
         }
 
+        public async Task<(long RequestId, int Ok, string Message)> CreateUnsignRequestAsync(
+            string oid, string reason, string requestedBy, string requestedByName)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@OID", oid?.Trim());
+            p.Add("@Reason", reason);
+            p.Add("@RequestedBy", requestedBy);
+            p.Add("@RequestedByName", requestedByName);
+            p.Add("@RequestID", dbType: DbType.Int64, direction: ParameterDirection.Output);
+            p.Add("@OK", dbType: DbType.Int32, direction: ParameterDirection.Output);
+            p.Add("@Message", dbType: DbType.String, size: 4000, direction: ParameterDirection.Output);
+
+            await con.ExecuteAsync("dbo.wsp_ECtr_UnsignRequest_Create", p, commandType: CommandType.StoredProcedure);
+
+            return (p.Get<long>("@RequestID"), p.Get<int>("@OK"), p.Get<string>("@Message"));
+        }
+
         public async Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId)
         {
             using var con = _dbConnectionFactory.GetConnection(BosOnline);

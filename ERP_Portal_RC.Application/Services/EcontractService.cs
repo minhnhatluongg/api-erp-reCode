@@ -999,6 +999,28 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
+        public async Task<ApiResponse<object>> CreateUnsignRequestAsync(UnsignProposalDto dto, string userCode, string fullName)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.OID))
+                return ApiResponse<object>.ErrorResponse("OID không được để trống.");
+            if (string.IsNullOrWhiteSpace(dto.Reason) || dto.Reason.Trim().Length < 10)
+                return ApiResponse<object>.ErrorResponse("Lý do gỡ ký phải có ít nhất 10 ký tự.");
+
+            try
+            {
+                var (requestId, ok, message) = await _eContractRepository.CreateUnsignRequestAsync(
+                    dto.OID, dto.Reason.Trim(), userCode, fullName);
+
+                return ok == 1
+                    ? ApiResponse<object>.SuccessResponse(new { requestId }, message)
+                    : ApiResponse<object>.ErrorResponse(message, 422);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi tạo đề xuất gỡ ký: " + ex.Message);
+            }
+        }
+
         public async Task<ApiResponse<object>> RutTrinhKyAsync(UnSignRequest model)
         {
             string correlationId = Guid.NewGuid().ToString();
