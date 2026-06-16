@@ -69,7 +69,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@FullName", request.FullName);
             parameters.Add("@Email", request.Email);
             parameters.Add("@ManagerEmplID", request.ManagerEmplID);
-            parameters.Add("@PsID", request.PsID);
+            // @PsID không truyền — store tự dùng mặc định '00084' (TDV/CTV)
             parameters.Add("@socmnd", request.SoCMND);
             parameters.Add("@CrtUser", hardcodedAdminId);
 

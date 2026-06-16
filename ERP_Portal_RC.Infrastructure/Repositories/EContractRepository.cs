@@ -977,6 +977,38 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return (p.Get<int>("@OK"), p.Get<string>("@Message"));
         }
 
+        public async Task<IEnumerable<KLContractStatusDto>> GetKLContractStatusListAsync(
+            DateTime? fromDate, DateTime? toDate, int page, int pageSize)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@FromDate", fromDate);
+            p.Add("@ToDate", toDate);
+            p.Add("@Page", page);
+            p.Add("@PageSize", pageSize);
+            return await con.QueryAsync<KLContractStatusDto>(
+                "dbo.wsp_KL_ContractStatus_List", p,
+                commandType: CommandType.StoredProcedure, commandTimeout: 120);
+        }
+
+        public async Task<KLContractDetailDto> GetKLContractStatusByOidAsync(string oid)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@OID", oid?.Trim());
+
+            using var multi = await con.QueryMultipleAsync(
+                "dbo.wsp_KL_ContractStatus_ByOID", p,
+                commandType: CommandType.StoredProcedure);
+
+            var head = await multi.ReadFirstOrDefaultAsync<KLContractDetailDto>();
+            if (head == null) return null;
+
+            head.UnsignHistory = (await multi.ReadAsync<KLUnsignEventDto>()).ToList();
+            head.Requests = (await multi.ReadAsync<KLUnsignRequestDto>()).ToList();
+            return head;
+        }
+
         public async Task<(long RequestId, int Ok, string Message)> CreateUnsignRequestAsync(
             string oid, string reason, string requestedBy, string requestedByName)
         {
@@ -993,6 +1025,153 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             await con.ExecuteAsync("dbo.wsp_ECtr_UnsignRequest_Create", p, commandType: CommandType.StoredProcedure);
 
             return (p.Get<long>("@RequestID"), p.Get<int>("@OK"), p.Get<string>("@Message"));
+        }
+
+        public async Task<List<UnsignRequestItem>> ListUnsignRequestsAsync(string? status, DateTime? frmDate, DateTime? endDate)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@Status", string.IsNullOrWhiteSpace(status) ? null : status.Trim());
+            p.Add("@FrmDate", frmDate);
+            p.Add("@EndDate", endDate);
+
+            var rows = await con.QueryAsync<UnsignRequestItem>(
+                "dbo.wsp_ECtr_UnsignRequest_List", p, commandType: CommandType.StoredProcedure);
+            return rows.ToList();
+        }
+
+        public async Task<(string? Oid, Guid CorrelationId, string? Reason, int Ok, string Message)> ApproveUnsignRequestAsync(
+            long requestId, string reviewedBy, string? reviewedByName, string? reviewNote)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@RequestID", requestId);
+            p.Add("@ReviewedBy", reviewedBy);
+            p.Add("@ReviewedByName", reviewedByName);
+            p.Add("@ReviewNote", reviewNote);
+            p.Add("@OID", dbType: DbType.String, size: 50, direction: ParameterDirection.Output);
+            p.Add("@CorrelationId", dbType: DbType.Guid, direction: ParameterDirection.Output);
+            p.Add("@Reason", dbType: DbType.String, size: 1000, direction: ParameterDirection.Output);
+            p.Add("@OK", dbType: DbType.Int32, direction: ParameterDirection.Output);
+            p.Add("@Message", dbType: DbType.String, size: 4000, direction: ParameterDirection.Output);
+
+            await con.ExecuteAsync("dbo.wsp_ECtr_UnsignRequest_Approve", p, commandType: CommandType.StoredProcedure);
+
+            return (
+                p.Get<string?>("@OID"),
+                p.Get<Guid?>("@CorrelationId") ?? Guid.Empty,
+                p.Get<string?>("@Reason"),
+                p.Get<int>("@OK"),
+                p.Get<string>("@Message"));
+        }
+
+        public async Task<(int Ok, string Message)> SetUnsignRequestResultAsync(
+            long requestId, bool success, string unsignStatus, string unsignMessage)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@RequestID", requestId);
+            p.Add("@Success", success);
+            p.Add("@UnsignStatus", unsignStatus);
+            p.Add("@UnsignMessage", unsignMessage);
+            p.Add("@OK", dbType: DbType.Int32, direction: ParameterDirection.Output);
+            p.Add("@Message", dbType: DbType.String, size: 4000, direction: ParameterDirection.Output);
+
+            await con.ExecuteAsync("dbo.wsp_ECtr_UnsignRequest_SetResult", p, commandType: CommandType.StoredProcedure);
+
+            return (p.Get<int>("@OK"), p.Get<string>("@Message"));
+        }
+
+        public async Task<(int Ok, string Message)> RejectUnsignRequestAsync(
+            long requestId, string reviewedBy, string? reviewedByName, string reviewNote)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@RequestID", requestId);
+            p.Add("@ReviewedBy", reviewedBy);
+            p.Add("@ReviewedByName", reviewedByName);
+            p.Add("@ReviewNote", reviewNote);
+            p.Add("@OK", dbType: DbType.Int32, direction: ParameterDirection.Output);
+            p.Add("@Message", dbType: DbType.String, size: 4000, direction: ParameterDirection.Output);
+
+            await con.ExecuteAsync("dbo.wsp_ECtr_UnsignRequest_Reject", p, commandType: CommandType.StoredProcedure);
+
+            return (p.Get<int>("@OK"), p.Get<string>("@Message"));
+        }
+
+        public async Task<List<UnsignHistoryItem>> GetMyUnsignHistoryAsync(
+            string actionBy, DateTime? frmDate, DateTime? endDate, string? search, int page, int pageSize)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 20;
+
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            const string sql = @"
+                ;WITH cte AS (
+                    SELECT
+                        t.Id,
+                        t.ContractOID                AS OID,
+                        e.CusName,
+                        e.CusTax,
+                        t.ActionBy,
+                        t.ActionByName,
+                        t.ActionDate,
+                        t.Reason,
+                        t.PrevSignNumb,
+                        ISNULL((
+                            SELECT TOP (1) ul.ActionStatus
+                            FROM BosControlEVAT.dbo.ECtr_UnsignLogs ul WITH (NOLOCK)
+                            WHERE ul.CorrelationId = t.CorrelationId
+                        ), '')                       AS UnsignStatus,
+                        COUNT(*) OVER ()             AS TotalCount,
+                        ROW_NUMBER() OVER (ORDER BY t.ActionDate DESC) AS RowNum
+                    FROM BosControlEVAT.dbo.ECtr_ContractTrackingLog t WITH (NOLOCK)
+                    LEFT JOIN BosOnline.dbo.EContracts e WITH (NOLOCK)
+                        ON e.OID = t.ContractOID
+                    WHERE t.ActionType = 'UNSIGN'
+                      AND t.ActionBy = @ActionBy
+                      AND (@FrmDate IS NULL OR t.ActionDate >= @FrmDate)
+                      AND (@EndDate IS NULL OR t.ActionDate < DATEADD(DAY, 1, @EndDate))
+                      AND (@Search IS NULL OR @Search = ''
+                           OR t.ContractOID LIKE '%' + @Search + '%'
+                           OR e.CusName     LIKE N'%' + @Search + '%'
+                           OR e.CusTax      LIKE '%' + @Search + '%')
+                )
+                SELECT *
+                FROM cte
+                WHERE RowNum BETWEEN ((@Page - 1) * @PageSize + 1) AND (@Page * @PageSize)
+                ORDER BY ActionDate DESC;";
+
+            var p = new DynamicParameters();
+            p.Add("@ActionBy", actionBy);
+            p.Add("@FrmDate", frmDate);
+            p.Add("@EndDate", endDate);
+            p.Add("@Search", string.IsNullOrWhiteSpace(search) ? null : search.Trim());
+            p.Add("@Page", page);
+            p.Add("@PageSize", pageSize);
+
+            var rows = await con.QueryAsync<UnsignHistoryItem>(sql, p);
+            return rows.ToList();
+        }
+
+        public async Task<(bool Ok, string Message)> DeletePendingJobAsync(string jobOid, string crtUser)
+        {
+            using var con = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@OID", jobOid);
+            p.Add("@Crt_User", crtUser);
+
+            // SP trả về 1 cột excStatus = '1|message' (OK) hoặc '0|lý do' (lỗi).
+            var exc = await con.QueryFirstOrDefaultAsync<string>(
+                "dbo.wspDelete_EContractJob_Pending", p, commandType: CommandType.StoredProcedure);
+
+            if (string.IsNullOrEmpty(exc))
+                return (false, "Không nhận được phản hồi từ store xóa yêu cầu.");
+
+            var parts = exc.Split(new[] { '|' }, 2);
+            var ok = parts[0] == "1";
+            var msg = parts.Length > 1 ? parts[1] : exc;
+            return (ok, msg);
         }
 
         public async Task<(bool Success, string Message, object Data)> UnSignAsync(UnSignRequest model, string correlationId)

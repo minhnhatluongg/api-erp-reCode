@@ -22,6 +22,7 @@ namespace API.ERP_Portal_RC.Controllers
         /// <param name="clnID"></param>
         /// <param name="isManager"></param>
         /// <returns></returns>
+        [HttpGet("managers")]            // không truyền clnID -> mặc định 21:000
         [HttpGet("managers/{clnID}")]
         public async Task<ActionResult<ApiResponse<List<ManagerDto>>>> GetManagers(string clnID = "21:000",bool isManager = false)
         {
@@ -40,7 +41,7 @@ namespace API.ERP_Portal_RC.Controllers
         ///   <item><c>IsCreateAccount = false</c>: chỉ thêm nhân sự, không cần <c>LoginName</c>/<c>Password</c>.</item>
         ///   <item><c>IsCreateAccount = true</c>: phải có <c>LoginName</c> (≥5 ký tự) và <c>Password</c> (≥6 ký tự)
         ///         để tạo tài khoản đăng nhập.</item>
-        ///   <item><c>PsID</c>, <c>Phone</c>: tuỳ chọn.</item>
+        ///   <item><c>Phone</c>: tuỳ chọn. (PsID đã bỏ — store tự mặc định '00084'.)</item>
         /// </list>
         /// </remarks>
         /// <param name="request">Thông tin đăng ký nhân sự Sale.</param>

@@ -66,6 +66,21 @@ namespace ERP_Portal_RC.Domain.Interfaces
         Task<(bool Success, string Message, object Data)> RutTrinhKyAsync(UnSignRequest model, string correlationId);
         // Đề xuất gỡ ký — sale tạo đề xuất (hàng đợi chờ kế toán duyệt)
         Task<(long RequestId, int Ok, string Message)> CreateUnsignRequestAsync(string oid, string reason, string requestedBy, string requestedByName);
+        // Đối soát cho Khánh Linh (read-only)
+        Task<IEnumerable<KLContractStatusDto>> GetKLContractStatusListAsync(DateTime? fromDate, DateTime? toDate, int page, int pageSize);
+        Task<KLContractDetailDto> GetKLContractStatusByOidAsync(string oid);
+        // Kế toán xem danh sách đề xuất gỡ ký
+        Task<List<UnsignRequestItem>> ListUnsignRequestsAsync(string? status, DateTime? frmDate, DateTime? endDate);
+        // Kế toán duyệt — khoá đơn (APPROVED) → trả OID/CorrelationId/Reason để app gọi /unsign
+        Task<(string? Oid, Guid CorrelationId, string? Reason, int Ok, string Message)> ApproveUnsignRequestAsync(long requestId, string reviewedBy, string? reviewedByName, string? reviewNote);
+        // Ghi kết quả gỡ ký ngược lại hàng đợi sau khi app gọi API /unsign
+        Task<(int Ok, string Message)> SetUnsignRequestResultAsync(long requestId, bool success, string unsignStatus, string unsignMessage);
+        // Kế toán từ chối (lý do bắt buộc)
+        Task<(int Ok, string Message)> RejectUnsignRequestAsync(long requestId, string reviewedBy, string? reviewedByName, string reviewNote);
+        // Lịch sử gỡ ký của 1 người (đọc ECtr_ContractTrackingLog, ActionType='UNSIGN') — có search + phân trang
+        Task<List<UnsignHistoryItem>> GetMyUnsignHistoryAsync(string actionBy, DateTime? frmDate, DateTime? endDate, string? search, int page, int pageSize);
+        // Sale xóa yêu cầu Job đang chờ duyệt (SignNumb mới nhất = 101) — SP wspDelete_EContractJob_Pending
+        Task<(bool Ok, string Message)> DeletePendingJobAsync(string jobOid, string crtUser);
         //Nghiệp vụ lịch sử Job 
         Task<EContractHistoryRaw> GetFullHistoryDataAsync(string oid);
         Task<List<JobEntity>> GetJobKTbyOID(string oid);
