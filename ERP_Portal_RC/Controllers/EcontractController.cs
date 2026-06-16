@@ -459,6 +459,125 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         /// <summary>
+        /// Sale ĐỀ XUẤT GỠ KÝ hợp đồng đã ký (SignNumb >= 301), kèm lý do.
+        /// Lưu vào hàng đợi ECtr_UnsignRequests (PENDING) chờ kế toán duyệt.
+        /// Người đề xuất lấy từ token (UserCode / FullName).
+        /// </summary>
+        [HttpPost("unsign-request")]
+        public async Task<IActionResult> CreateUnsignRequest([FromBody] UnsignProposalDto request)
+        {
+            var userCode = User.FindFirst("UserCode")?.Value;
+            if (string.IsNullOrEmpty(userCode))
+                return Unauthorized(ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin định danh người dùng", 401));
+
+            var fullName = User.FindFirst("FullName")?.Value ?? string.Empty;
+
+            var result = await _econtractService.CreateUnsignRequestAsync(request, userCode, fullName);
+
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode == 200 ? 400 : result.StatusCode, result);
+        }
+
+        /// <summary>
+        /// Kế toán XEM danh sách đề xuất gỡ ký (hàng đợi ECtr_UnsignRequests).
+        /// status mặc định 'PENDING'. Hỗ trợ lọc ngày + tìm theo MST / mã hợp đồng / tên KH.
+        /// </summary>
+        [HttpGet("unsign-requests")]
+        public async Task<IActionResult> GetUnsignRequests(
+            [FromQuery] string? status = "PENDING",
+            [FromQuery] DateTime? frmDate = null,
+            [FromQuery] DateTime? endDate = null,
+            [FromQuery] string? search = null)
+        {
+            var result = await _econtractService.GetUnsignRequestsAsync(status, frmDate, endDate, search);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
+        }
+
+        /// <summary>
+        /// Kế toán DUYỆT đề xuất gỡ ký → app gọi gỡ ký thực tế → ghi kết quả.
+        /// </summary>
+        [HttpPost("unsign-requests/{requestId:long}/approve")]
+        public async Task<IActionResult> ApproveUnsignRequest(long requestId, [FromBody] UnsignReviewDto? body)
+        {
+            // Ưu tiên ReviewerCode (win_id) do LOT-ERP truyền xuống — đó là giá trị
+            // được lưu ở ActionBy/RequestedBy. Fallback UserCode token nếu không có.
+            var userCode = !string.IsNullOrWhiteSpace(body?.ReviewerCode)
+                ? body!.ReviewerCode!
+                : (User.FindFirst("UserCode")?.Value ?? string.Empty);
+            if (string.IsNullOrEmpty(userCode))
+                return Unauthorized(ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin định danh người dùng", 401));
+
+            var fullName = !string.IsNullOrWhiteSpace(body?.ReviewerName)
+                ? body!.ReviewerName!
+                : (User.FindFirst("FullName")?.Value ?? string.Empty);
+
+            var result = await _econtractService.ApproveUnsignRequestAsync(requestId, userCode, fullName, body?.ReviewNote);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode == 200 ? 400 : result.StatusCode, result);
+        }
+
+        /// <summary>
+        /// Kế toán TỪ CHỐI đề xuất gỡ ký (lý do bắt buộc).
+        /// </summary>
+        [HttpPost("unsign-requests/{requestId:long}/reject")]
+        public async Task<IActionResult> RejectUnsignRequest(long requestId, [FromBody] UnsignReviewDto body)
+        {
+            var userCode = !string.IsNullOrWhiteSpace(body?.ReviewerCode)
+                ? body!.ReviewerCode!
+                : (User.FindFirst("UserCode")?.Value ?? string.Empty);
+            if (string.IsNullOrEmpty(userCode))
+                return Unauthorized(ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin định danh người dùng", 401));
+
+            var fullName = !string.IsNullOrWhiteSpace(body?.ReviewerName)
+                ? body!.ReviewerName!
+                : (User.FindFirst("FullName")?.Value ?? string.Empty);
+
+            var result = await _econtractService.RejectUnsignRequestAsync(requestId, userCode, fullName, body?.ReviewNote ?? string.Empty);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode == 200 ? 400 : result.StatusCode, result);
+        }
+
+        /// <summary>
+        /// Lịch sử gỡ ký của CHÍNH người đăng nhập (ECtr_ContractTrackingLog, ActionType='UNSIGN').
+        /// VD: "tháng này mình đã gỡ ký những đơn nào".
+        /// </summary>
+        [HttpGet("my-unsign-history")]
+        public async Task<IActionResult> GetMyUnsignHistory(
+            [FromQuery] string? actionBy = null,
+            [FromQuery] DateTime? frmDate = null,
+            [FromQuery] DateTime? endDate = null,
+            [FromQuery] string? search = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            // actionBy (win_id) do LOT-ERP truyền xuống = giá trị lưu ở ActionBy.
+            // Fallback UserCode token nếu LOT-ERP không truyền.
+            var code = !string.IsNullOrWhiteSpace(actionBy)
+                ? actionBy
+                : (User.FindFirst("UserCode")?.Value ?? string.Empty);
+            if (string.IsNullOrEmpty(code))
+                return Unauthorized(ApiResponse<object>.ErrorResponse("Không tìm thấy thông tin định danh người dùng", 401));
+
+            var result = await _econtractService.GetMyUnsignHistoryAsync(code, frmDate, endDate, search, page, pageSize);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode, result);
+        }
+
+        /// <summary>
+        /// Sale XÓA yêu cầu Job đang chờ duyệt (SignNumb mới nhất = 101, đúng người tạo).
+        /// Job đã được xử lý (>= 201) → không cho xóa. CrtUser (win_id) do LOT-ERP truyền.
+        /// </summary>
+        [HttpDelete("job-pending")]
+        public async Task<IActionResult> DeletePendingJob([FromBody] DeleteJobRequestDto body)
+        {
+            if (body == null || string.IsNullOrWhiteSpace(body.OID))
+                return BadRequest(ApiResponse<object>.ErrorResponse("Thiếu OID yêu cầu (job)."));
+
+            var crtUser = !string.IsNullOrWhiteSpace(body.CrtUser)
+                ? body.CrtUser!
+                : (User.FindFirst("UserCode")?.Value ?? string.Empty);
+
+            var result = await _econtractService.DeletePendingJobAsync(body.OID, crtUser);
+            return result.Success ? Ok(result) : StatusCode(result.StatusCode == 200 ? 400 : result.StatusCode, result);
+        }
+
+        /// <summary>
         /// Lấy lịch sử các job xử lý theo OID hợp đồng.
         /// </summary>
         /// <param name="oid"></param>

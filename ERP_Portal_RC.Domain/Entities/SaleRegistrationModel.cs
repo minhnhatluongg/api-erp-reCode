@@ -16,7 +16,7 @@ namespace ERP_Portal_RC.Domain.Entities
         [Required]
         public string SoCMND { get; set; }
 
-        public string? PsID { get; set; }
+        // PsID đã bỏ khỏi input — store wsp_RegisterSaleHierarchy tự mặc định '00084' (TDV/CTV).
         public string? Phone { get; set; }
         public bool IsCreateAccount { get; set; } 
         public string? LoginName { get; set; }

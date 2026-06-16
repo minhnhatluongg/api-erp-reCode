@@ -57,6 +57,22 @@ namespace ERP_Portal_RC.Application.Interfaces
         /// Rút trình ký — chỉ cho phép khi hợp đồng đang ở SignNumb 101 và chưa có 301/501.
         /// </summary>
         Task<ApiResponse<object>> RutTrinhKyAsync(UnSignRequest model);
+        /// <summary>Sale đề xuất gỡ ký hợp đồng đã ký (kèm lý do) — chờ kế toán duyệt.</summary>
+        Task<ApiResponse<object>> CreateUnsignRequestAsync(UnsignProposalDto dto, string userCode, string fullName);
+        /// <summary>Khánh Linh đối soát: danh sách trạng thái hợp đồng (read-only).</summary>
+        Task<ApiResponse<object>> GetKLContractStatusListAsync(string fromDate, string toDate, int page, int pageSize);
+        /// <summary>Khánh Linh đối soát: trạng thái 1 hợp đồng theo OID.</summary>
+        Task<ApiResponse<object>> GetKLContractStatusByOidAsync(string oid);
+        /// <summary>Kế toán xem danh sách đề xuất gỡ ký (lọc trạng thái, ngày, MST/mã HĐ).</summary>
+        Task<ApiResponse<List<UnsignRequestItem>>> GetUnsignRequestsAsync(string? status, DateTime? frmDate, DateTime? endDate, string? search);
+        /// <summary>Kế toán duyệt đề xuất gỡ ký → gọi gỡ ký thực tế → ghi kết quả.</summary>
+        Task<ApiResponse<object>> ApproveUnsignRequestAsync(long requestId, string reviewerCode, string reviewerName, string? reviewNote);
+        /// <summary>Kế toán từ chối đề xuất gỡ ký (lý do bắt buộc).</summary>
+        Task<ApiResponse<object>> RejectUnsignRequestAsync(long requestId, string reviewerCode, string reviewerName, string reviewNote);
+        /// <summary>Lịch sử gỡ ký của 1 người (ECtr_ContractTrackingLog, ActionType='UNSIGN') — search + phân trang.</summary>
+        Task<ApiResponse<List<UnsignHistoryItem>>> GetMyUnsignHistoryAsync(string actionBy, DateTime? frmDate, DateTime? endDate, string? search, int page, int pageSize);
+        /// <summary>Sale xóa yêu cầu Job đang chờ duyệt (SignNumb mới nhất = 101, đúng người tạo).</summary>
+        Task<ApiResponse<object>> DeletePendingJobAsync(string jobOid, string crtUser);
         // Lấy lịch sử Job của hợp đồng
         Task<ApiResponse<EContractHistoryResponse>> GetJobHistoryAsync(string oid);
         //Check yêu cầu kiểm tra của kd/sale.

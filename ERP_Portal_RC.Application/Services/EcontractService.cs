@@ -999,6 +999,208 @@ namespace ERP_Portal_RC.Application.Services
             }
         }
 
+        public async Task<ApiResponse<object>> GetKLContractStatusListAsync(string fromDate, string toDate, int page, int pageSize)
+        {
+            try
+            {
+                DateTime? from = null, to = null;
+                if (DateTime.TryParse(fromDate, out var f)) from = f;
+                if (DateTime.TryParse(toDate, out var t)) to = t;
+                if (page < 1) page = 1;
+                if (pageSize < 1 || pageSize > 1000) pageSize = 100;
+
+                var rows = (await _eContractRepository.GetKLContractStatusListAsync(from, to, page, pageSize)).ToList();
+                int total = rows.Count > 0 ? rows[0].TotalCount : 0;
+
+                return ApiResponse<object>.SuccessResponse(new { items = rows, totalCount = total, page, pageSize });
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi đối soát: " + ex.Message, 500);
+            }
+        }
+
+        public async Task<ApiResponse<object>> GetKLContractStatusByOidAsync(string oid)
+        {
+            if (string.IsNullOrWhiteSpace(oid))
+                return ApiResponse<object>.ErrorResponse("Thiếu OID.");
+            try
+            {
+                var row = await _eContractRepository.GetKLContractStatusByOidAsync(oid);
+                return row == null
+                    ? ApiResponse<object>.ErrorResponse("Không tìm thấy hợp đồng.", 404)
+                    : ApiResponse<object>.SuccessResponse(row);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi đối soát: " + ex.Message, 500);
+            }
+        }
+
+        public async Task<ApiResponse<object>> CreateUnsignRequestAsync(UnsignProposalDto dto, string userCode, string fullName)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.OID))
+                return ApiResponse<object>.ErrorResponse("OID không được để trống.");
+            if (string.IsNullOrWhiteSpace(dto.Reason) || dto.Reason.Trim().Length < 10)
+                return ApiResponse<object>.ErrorResponse("Lý do gỡ ký phải có ít nhất 10 ký tự.");
+
+            try
+            {
+                var (requestId, ok, message) = await _eContractRepository.CreateUnsignRequestAsync(
+                    dto.OID, dto.Reason.Trim(), userCode, fullName);
+
+                return ok == 1
+                    ? ApiResponse<object>.SuccessResponse(new { requestId }, message)
+                    : ApiResponse<object>.ErrorResponse(message, 422);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi tạo đề xuất gỡ ký: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Kế toán xem danh sách đề xuất gỡ ký. search lọc thêm theo MST / mã hợp đồng (OID) / tên KH.
+        /// </summary>
+        public async Task<ApiResponse<List<UnsignRequestItem>>> GetUnsignRequestsAsync(
+            string? status, DateTime? frmDate, DateTime? endDate, string? search)
+        {
+            try
+            {
+                var items = await _eContractRepository.ListUnsignRequestsAsync(status, frmDate, endDate);
+
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var kw = search.Trim().ToLowerInvariant();
+                    items = items.Where(x =>
+                        (x.OID ?? "").ToLowerInvariant().Contains(kw) ||
+                        (x.CusTax ?? "").ToLowerInvariant().Contains(kw) ||
+                        (x.CusName ?? "").ToLowerInvariant().Contains(kw)
+                    ).ToList();
+                }
+
+                return ApiResponse<List<UnsignRequestItem>>.SuccessResponse(items, "Lấy danh sách đề xuất gỡ ký thành công.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<List<UnsignRequestItem>>.ErrorResponse("Lỗi khi lấy danh sách đề xuất gỡ ký: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Kế toán DUYỆT đề xuất: (1) khoá đơn APPROVED + lấy OID/CorrelationId/Reason,
+        /// (2) gọi gỡ ký thực tế (dùng đúng CorrelationId để đối chiếu log),
+        /// (3) ghi kết quả ngược lại hàng đợi (APPROVED nếu OK, FAILED nếu lỗi → kế toán duyệt lại).
+        /// </summary>
+        public async Task<ApiResponse<object>> ApproveUnsignRequestAsync(
+            long requestId, string reviewerCode, string reviewerName, string? reviewNote)
+        {
+            try
+            {
+                var (oid, correlationId, reason, ok, message) =
+                    await _eContractRepository.ApproveUnsignRequestAsync(requestId, reviewerCode, reviewerName, reviewNote);
+
+                if (ok != 1)
+                    return ApiResponse<object>.ErrorResponse(message, 422);
+
+                // Gỡ ký thực tế — dùng lại CorrelationId của đề xuất để ECtr_UnsignLogs đối chiếu được.
+                var model = new UnSignRequest
+                {
+                    OID = oid,
+                    RequestedBy = reviewerCode,
+                    FullName = reviewerName,
+                    Role = "KeToan",
+                    Reason = reason
+                };
+
+                bool success;
+                string unsignStatus, unsignMessage;
+                try
+                {
+                    var result = await _eContractRepository.UnSignAsync(model, correlationId.ToString());
+                    success = result.Success;
+                    unsignStatus = success ? "DELETED" : "ERROR";
+                    unsignMessage = result.Message ?? "";
+                }
+                catch (Exception exUnsign)
+                {
+                    success = false;
+                    unsignStatus = "ERROR";
+                    unsignMessage = exUnsign.Message;
+                }
+
+                // Ghi kết quả ngược lại hàng đợi.
+                await _eContractRepository.SetUnsignRequestResultAsync(requestId, success, unsignStatus, unsignMessage);
+
+                return success
+                    ? ApiResponse<object>.SuccessResponse(new { requestId, oid, unsignStatus }, "Đã duyệt và gỡ ký hợp đồng " + oid + ".")
+                    : ApiResponse<object>.ErrorResponse("Đã duyệt nhưng gỡ ký thất bại: " + unsignMessage, 422);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi duyệt đề xuất gỡ ký: " + ex.Message);
+            }
+        }
+
+        /// <summary>Kế toán TỪ CHỐI đề xuất (lý do bắt buộc).</summary>
+        public async Task<ApiResponse<object>> RejectUnsignRequestAsync(
+            long requestId, string reviewerCode, string reviewerName, string reviewNote)
+        {
+            if (string.IsNullOrWhiteSpace(reviewNote))
+                return ApiResponse<object>.ErrorResponse("Vui lòng nhập lý do từ chối.", 422);
+
+            try
+            {
+                var (ok, message) = await _eContractRepository.RejectUnsignRequestAsync(
+                    requestId, reviewerCode, reviewerName, reviewNote.Trim());
+
+                return ok == 1
+                    ? ApiResponse<object>.SuccessResponse(new { requestId }, message)
+                    : ApiResponse<object>.ErrorResponse(message, 422);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi từ chối đề xuất gỡ ký: " + ex.Message);
+            }
+        }
+
+        /// <summary>Lịch sử gỡ ký của 1 người (ECtr_ContractTrackingLog, ActionType='UNSIGN') — search + phân trang.</summary>
+        public async Task<ApiResponse<List<UnsignHistoryItem>>> GetMyUnsignHistoryAsync(
+            string actionBy, DateTime? frmDate, DateTime? endDate, string? search, int page, int pageSize)
+        {
+            if (string.IsNullOrWhiteSpace(actionBy))
+                return ApiResponse<List<UnsignHistoryItem>>.ErrorResponse("Thiếu mã người thực hiện.", 400);
+            try
+            {
+                var items = await _eContractRepository.GetMyUnsignHistoryAsync(actionBy, frmDate, endDate, search, page, pageSize);
+                return ApiResponse<List<UnsignHistoryItem>>.SuccessResponse(items, "Lấy lịch sử gỡ ký thành công.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<List<UnsignHistoryItem>>.ErrorResponse("Lỗi khi lấy lịch sử gỡ ký: " + ex.Message);
+            }
+        }
+
+        /// <summary>Sale xóa yêu cầu Job đang chờ duyệt (chỉ khi SignNumb mới nhất = 101, đúng người tạo).</summary>
+        public async Task<ApiResponse<object>> DeletePendingJobAsync(string jobOid, string crtUser)
+        {
+            if (string.IsNullOrWhiteSpace(jobOid))
+                return ApiResponse<object>.ErrorResponse("Thiếu OID yêu cầu (job).", 400);
+            if (string.IsNullOrWhiteSpace(crtUser))
+                return ApiResponse<object>.ErrorResponse("Thiếu người thao tác.", 400);
+            try
+            {
+                var (ok, message) = await _eContractRepository.DeletePendingJobAsync(jobOid.Trim(), crtUser.Trim());
+                return ok
+                    ? ApiResponse<object>.SuccessResponse(new { jobOid }, message)
+                    : ApiResponse<object>.ErrorResponse(message, 422);
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi hệ thống khi xóa yêu cầu: " + ex.Message);
+            }
+        }
+
         public async Task<ApiResponse<object>> RutTrinhKyAsync(UnSignRequest model)
         {
             string correlationId = Guid.NewGuid().ToString();
