@@ -113,6 +113,17 @@ builder.Services.AddHttpClient("HRAccountClient", client =>
     client.DefaultRequestHeaders.Accept.Add(
         new MediaTypeWithQualityHeaderValue("application/json"));
     client.DefaultRequestHeaders.Add("X-API-Key", builder.Configuration["HRAccountApi:ApiKey"]);
+})
+// erp.lotdev.online dùng chứng chỉ TLS nội bộ chưa được tin cậy trên server API
+// -> bắt tay TLS lỗi "The SSL connection could not be established".
+// Bỏ qua lỗi cert CHỈ khi gọi đúng host này (không ảnh hưởng các kết nối khác) + ép TLS 1.2/1.3.
+// (Giải pháp tạm; nên cài cert hợp lệ / import CA của erp.lotdev.online vào Trusted Root.)
+.ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.HttpClientHandler
+{
+    SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+    ServerCertificateCustomValidationCallback = (msg, cert, chain, errors) =>
+        msg.RequestUri != null &&
+        msg.RequestUri.Host.Equals("erp.lotdev.online", StringComparison.OrdinalIgnoreCase)
 });
 
 // FileConfig đã bỏ — thống nhất dùng FileUpload:* cho mọi cấu hình file (upload + get qua /files).
