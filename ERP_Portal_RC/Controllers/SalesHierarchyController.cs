@@ -65,6 +65,20 @@ namespace API.ERP_Portal_RC.Controllers
         }
 
         /// <summary>
+        /// Tạo lại TK hệ thống ngoài (LOT ERP) cho 1 nhân viên ĐÃ TỒN TẠI.
+        /// Dùng để retry khi đăng ký sale bị lỗi đồng bộ TK ngoài (vd lỗi SSL) — không tạo lại nhân viên.
+        /// Idempotent: nếu TK đã có thì hệ thống ngoài tự xử lý.
+        /// </summary>
+        [HttpPost("create-hr-account")]
+        public async Task<IActionResult> CreateHrAccount([FromBody] CreateHrAccountRequest request)
+        {
+            // Luôn trả HTTP 200 + cờ success trong body. KHÔNG trả 5xx để IIS/proxy không thay
+            // body lỗi bằng trang "error code: 5xx" (che mất thông báo thật từ hệ thống ngoài).
+            var result = await _salesHierarchyService.RetryCreateHrAccountAsync(request);
+            return Ok(result);
+        }
+
+        /// <summary>
         /// API Đăng Kí Account Kế Toán - LOT ERP
         /// </summary>
         /// <param name="request"></param>

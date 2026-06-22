@@ -14,6 +14,9 @@
         public string? SaleEmID { get; set; }
         public int CurrSignNumb { get; set; }
         public int currSignNumbJobKT { get; set; }
+        /// <summary>Ngày trình ký = Crt_Date của dòng SignNumb=101 (zsgn_webContracts).
+        /// NULL khi chưa trình ký (currSignNumb = 0) → FE hiện "Chưa trình ký".</summary>
+        public DateTime? ProposalSignDate { get; set; }
         public bool isUsingAcc { get; set;}
         public bool isKTTT_1 { get; set; }
         public bool is_NopHSS { get; set; }

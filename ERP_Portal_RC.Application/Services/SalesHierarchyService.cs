@@ -1,6 +1,7 @@
 ﻿using ERP_Portal_RC.Application.DTOs;
 using ERP_Portal_RC.Application.DTOs.AccountKeToan;
 using ERP_Portal_RC.Application.Interfaces;
+using ERP_Portal_RC.Domain.Common;
 using ERP_Portal_RC.Domain.Entities;
 using ERP_Portal_RC.Domain.Interfaces;
 using System;
@@ -194,6 +195,43 @@ namespace ERP_Portal_RC.Application.Services
             if (string.IsNullOrEmpty(parentIDSortID)) return "";
             var parts = parentIDSortID.Split('.');
             return parts.Last();
+        }
+
+        public async Task<ApiResponse<object>> RetryCreateHrAccountAsync(CreateHrAccountRequest request)
+        {
+            if (request == null) return ApiResponse<object>.ErrorResponse("Thiếu dữ liệu.");
+            if (string.IsNullOrWhiteSpace(request.EmplId)) return ApiResponse<object>.ErrorResponse("Thiếu mã nhân viên (EmplId).");
+            if (string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(request.Email))
+                return ApiResponse<object>.ErrorResponse("Thiếu Họ tên / Email.");
+            if ((request.LoginName ?? "").Trim().Length < 5) return ApiResponse<object>.ErrorResponse("Tài khoản đăng nhập phải ≥ 5 ký tự.");
+            if ((request.Password ?? "").Length < 6) return ApiResponse<object>.ErrorResponse("Mật khẩu phải ≥ 6 ký tự.");
+
+            try
+            {
+                // 1) Đảm bảo TK ERP (bosUser) tồn tại — idempotent, đã có thì trả về luôn.
+                try
+                {
+                    await _salesHierarchyRepository.CreateERPAccountOnlyAsync(
+                        request.LoginName.Trim(), request.Password, request.FullName, request.Email, request.EmplId);
+                }
+                catch { /* không chặn bước tạo TK ngoài */ }
+
+                // 2) Tạo TK hệ thống ngoài (LOT ERP) — đây là bước hay bị lỗi đồng bộ.
+                var (success, err) = await _salesHierarchyRepository.CreateHRAccountAsync(
+                    request.FullName, request.Email, request.Phone ?? "",
+                    request.LoginName.Trim(), request.Password, request.EmplId);
+
+                if (!success)
+                    return ApiResponse<object>.ErrorResponse("Tạo TK hệ thống ngoài thất bại: " + err, 502);
+
+                return ApiResponse<object>.SuccessResponse(
+                    new { emplId = request.EmplId, loginName = request.LoginName.Trim() },
+                    "Tạo lại TK hệ thống ngoài (LOT ERP) thành công.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<object>.ErrorResponse("Lỗi tạo lại TK hệ thống ngoài: " + ex.Message, 500);
+            }
         }
     }
 }
