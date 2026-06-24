@@ -391,7 +391,9 @@ namespace ERP_Portal_RC.Application.Services
                 .Replace("{order_date_month}", now.Month.ToString("00"))
                 .Replace("{order_date_year}", now.Year.ToString())
                 .Replace("{partner_name}", SecurityElement.Escape(request.PartnerName ?? ""))
-                .Replace("{partner_vat}", request.PartnerVat ?? "")
+                // Ưu tiên hiển thị CCCD nếu có & khác ""; ngược lại dùng MST.
+                .Replace("{partner_vat}",
+                    !string.IsNullOrWhiteSpace(request.PartnerCMND) ? request.PartnerCMND : (request.PartnerVat ?? ""))
                 .Replace("{partner_address}", SecurityElement.Escape(request.PartnerAddress ?? ""))
                 .Replace("{partner_phone}", request.PartnerPhone ?? "")
                 .Replace("{partner_email}", request.PartnerEmail ?? "")
@@ -503,6 +505,7 @@ namespace ERP_Portal_RC.Application.Services
                 CusAddress = req.PartnerAddress ?? "",
                 CusContactAddress = req.PartnerAddress ?? "",
                 CusTax = req.PartnerVat ?? "",
+                CusCMND_ID = req.PartnerCMND,   // CCCD (nếu có) — lưu song song MST
                 CusTel = req.PartnerPhone ?? "",
                 CusEmail = req.PartnerEmail ?? "",
                 CusPeople_Sign = req.PartnerContactName, 
@@ -1442,7 +1445,10 @@ namespace ERP_Portal_RC.Application.Services
             model.CustomerTaxCode = new CustomerTaxCodeDTO
             {
                 Title = raw.EContract?.CusName ?? string.Empty,
-                MaSoThue = raw.EContract?.CusTax ?? string.Empty,
+                // Ưu tiên hiển thị CCCD nếu có & khác ""; ngược lại dùng MST.
+                MaSoThue = !string.IsNullOrWhiteSpace(raw.EContract?.CusCMND_ID)
+                    ? raw.EContract.CusCMND_ID
+                    : (raw.EContract?.CusTax ?? string.Empty),
                 DiaChiCongTy = raw.EContract?.CusAddress ?? string.Empty
             };
 
@@ -1477,7 +1483,10 @@ namespace ERP_Portal_RC.Application.Services
 
                         CmpnName = raw.EContract?.CmpnName,
                         CusName = raw.EContract?.CusName,
-                        CusTax = raw.EContract?.CusTax,
+                        // Ưu tiên hiển thị CCCD nếu có & khác ""; ngược lại dùng MST.
+                        CusTax = !string.IsNullOrWhiteSpace(raw.EContract?.CusCMND_ID)
+                            ? raw.EContract.CusCMND_ID
+                            : raw.EContract?.CusTax,
                         CusAddress = raw.EContract?.CusAddress,
                         CusEmail = raw.EContract?.CusEmail,
                         //IsTT78 = raw.EContract?.IsTT78 ?? false,
@@ -1507,6 +1516,7 @@ namespace ERP_Portal_RC.Application.Services
                 CmpnName = eContract.CmpnName,
                 CusName = eContract.CusName,
                 CusTax = eContract.CusTax,
+                CusCMND_ID = eContract.CusCMND_ID,   // CCCD — FE ưu tiên hiển thị nếu có, else MST
                 CusAddress = eContract.CusAddress,
                 CusEmail = eContract.CusEmail,
                 CurrSignNumb = eContract.CurrSignNumb,
@@ -1875,6 +1885,7 @@ namespace ERP_Portal_RC.Application.Services
                     CusPosition_BySign = resultRaw.EContract.CusPosition_BySign,
                     Description = resultRaw.EContract.Descrip,
                     CusTax = resultRaw.EContract.CusTax,
+                    CusCMND_ID = resultRaw.EContract.CusCMND_ID,   // CCCD — FE ưu tiên hiển thị nếu có, else MST
                     CusTel = resultRaw.EContract.CusTel,
                     CusAddress = resultRaw.EContract.CusAddress,
                     CusEmail = resultRaw.EContract.CusEmail,

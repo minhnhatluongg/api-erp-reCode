@@ -55,6 +55,8 @@ namespace ERP_Portal_RC.Domain.EntitiesInvoice
         /// <summary>Tên ngân hàng</summary>
         public string? CusBankAddress { get; set; }
 
+        /// <summary>Căn cước công dân của khác</summary>
+        public string? CusCMND_ID { get; set; }
         /// <summary>Ngày ký hợp đồng → dùng làm invDate</summary>
         public DateTime? ODate { get; set; }
     }

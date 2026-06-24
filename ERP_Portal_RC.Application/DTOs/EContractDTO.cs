@@ -18,6 +18,7 @@ namespace ERP_Portal_RC.Application.DTOs
         public DateTime? ODate { get; set; } = DateTime.Now;
         public string? CusName { get; set; }
         public string? CusTax { get; set; }
+        public string? CusCMND_ID { get; set; }
         public string? CusEmail { get; set; }
         public string? CusTel { get; set; }
         public string? CusAddress { get; set; }

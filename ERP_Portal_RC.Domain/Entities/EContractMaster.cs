@@ -32,6 +32,7 @@ namespace ERP_Portal_RC.Domain.Entities
         public string CusAddress { get; set; }
         public string CusContactAddress { get; set; }
         public string CusTax { get; set; }
+        public string? CusCMND_ID { get; set; }   // CCCD khách hàng — lưu song song MST
         public string CusTel { get; set; }
         public string CusFax { get; set; }
         public string CusEmail { get; set; }

@@ -563,6 +563,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             parameters.Add("@CusAddress", master.CusAddress);
             parameters.Add("@CusContactAddress", master.CusContactAddress);
             parameters.Add("@CusTax", master.CusTax);
+            parameters.Add("@CusCMND_ID", master.CusCMND_ID);   // CCCD (NULL nếu không có)
             parameters.Add("@CusTel", master.CusTel);
             parameters.Add("@CusFax", master.CusFax);
             parameters.Add("@CusEmail", master.CusEmail);
@@ -783,6 +784,7 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             p.Add("@CusAddress",         master.CusAddress);
             p.Add("@CusContactAddress",  master.CusContactAddress);
             p.Add("@CusTax",             master.CusTax);
+            p.Add("@CusCMND_ID",         master.CusCMND_ID);   // CCCD (NULL = giữ nguyên giá trị cũ)
             p.Add("@CusTel",             master.CusTel);
             p.Add("@CusFax",             master.CusFax);
             p.Add("@CusEmail",           master.CusEmail);

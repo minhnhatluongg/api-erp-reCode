@@ -185,7 +185,8 @@ public class InvoiceService : IInvoiceService
                 CusTel = result.EContracts.CusTel,
                 CusBankNumber = result.EContracts.CusBankNumber,
                 CusBankAddress = result.EContracts.CusBankAddress,
-                ODate = result.EContracts.ODate
+                ODate = result.EContracts.ODate,
+                CusCMND_ID = result.EContracts.CusCMND_ID
             },
             EContractDetails = result.EContractDetails?
                 .Select(d => new EContractDetail
@@ -312,7 +313,7 @@ public class InvoiceService : IInvoiceService
             InvCustomer = "0",
             BuyerName = contract.CusPeople_Sign,
             BuyerCompany = contract.CusName,
-            BuyerTax = contract.CusTax,
+            BuyerTax = !string.IsNullOrWhiteSpace(contract.CusCMND_ID) ? contract.CusCMND_ID : contract.CusTax,
             BuyerAddress = contract.CusAddress,
             // Ưu tiên email Sale (từ GetSaleInfo_ByInvRef), fallback về CusEmail của KH
             BuyerEmail = !string.IsNullOrWhiteSpace(saleEmail) ? saleEmail : contract.CusEmail,
