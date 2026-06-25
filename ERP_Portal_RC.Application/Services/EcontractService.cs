@@ -538,9 +538,14 @@ namespace ERP_Portal_RC.Application.Services
             {
                 decimal.TryParse(d.VAT_Rate, out decimal vatRateValue);
 
-                decimal amount = d.Qtty * d.Price;
-                decimal vatAmount = amount * (vatRateValue / 100);
-                decimal sumAmount = amount + vatAmount;
+                // Price = đơn giá ĐÃ GỒM VAT (giá sau thuế). Tổng = Qtty*Price,
+                // KHÔNG cộng thêm VAT. Tách ngược ra tiền chưa thuế + tiền thuế.
+                decimal gross = d.Qtty * d.Price;
+                decimal amount = vatRateValue > 0
+                    ? Math.Round(gross / (1 + vatRateValue / 100m), 0, MidpointRounding.AwayFromZero)
+                    : gross;
+                decimal vatAmount = gross - amount;
+                decimal sumAmount = gross;
 
                 return new EContractDetails
                 {
@@ -1385,6 +1390,66 @@ namespace ERP_Portal_RC.Application.Services
             }
 
             return ApiResponse<List<EContractDetails>>.SuccessResponse(details, "Lấy chi tiết hợp đồng thành công.");
+        }
+
+        /// <summary>
+        /// Dữ liệu gốc dựng "Chứng từ bán hàng" bên LOT từ 1 hợp đồng.
+        /// Header lấy từ EContractMaster, lines từ EContractDetails (1 call wspGet_EContracts_ByID).
+        /// UnitPrice = ItemPrice (GỒM VAT) — LOT tự tách giá chưa thuế bằng VatRate.
+        /// </summary>
+        public async Task<ApiResponse<SalesVoucherDataDto>> GetSalesVoucherDataAsync(string oid)
+        {
+            if (string.IsNullOrEmpty(oid))
+                return ApiResponse<SalesVoucherDataDto>.ErrorResponse("OID không hợp lệ.");
+
+            string cleanOid = System.Net.WebUtility.UrlDecode(oid).Replace("%2F", "/").Replace("%2f", "/");
+
+            var raw = await _eContractRepository.GetEContractRawDataAsync(cleanOid);
+            if (raw?.EContract == null)
+                return ApiResponse<SalesVoucherDataDto>.ErrorResponse("Không tìm thấy hợp đồng.");
+
+            var m = raw.EContract;
+            var dto = new SalesVoucherDataDto
+            {
+                Oid = m.OID ?? cleanOid,
+                CustomerCode = m.CustomerID ?? "",
+                CustomerName = m.CusName ?? "",
+                TaxCode = m.CusTax ?? "",
+                Cccd = m.CusCMND_ID ?? "",
+                Address = m.CusAddress ?? "",
+                Phone = m.CusTel ?? "",
+                ContactPerson = m.CusPeople_Sign ?? "",
+                SalesPersonCode = m.SaleEmID ?? "",
+                SalesPersonName = m.SaleFullName ?? "",
+                Description = m.Descrip ?? "",
+                Lines = (raw.EContractDetails ?? new List<EContractDetails>())
+                    .Where(d => !string.IsNullOrWhiteSpace(d.ItemName))
+                    .Select(d => new SalesVoucherLineDto
+                    {
+                        ProductCode = d.ItemID ?? "",
+                        ProductName = d.ItemName ?? "",
+                        Unit = !string.IsNullOrWhiteSpace(d.itemUnitName) ? d.itemUnitName : (d.ItemUnit ?? ""),
+                        Quantity = d.ItemQtty,
+                        UnitPrice = d.ItemPrice,   // GỒM VAT
+                        VatRate = d.VAT_Rate,
+                    })
+                    .ToList(),
+            };
+
+            return ApiResponse<SalesVoucherDataDto>.SuccessResponse(dto, "Lấy dữ liệu chứng từ thành công.");
+        }
+
+        /// <summary>Đánh dấu hợp đồng đã tạo Chứng từ bán hàng (chống tạo trùng).</summary>
+        public async Task<ApiResponse<object>> MarkSalesVoucherCreatedAsync(string oid)
+        {
+            if (string.IsNullOrEmpty(oid))
+                return ApiResponse<object>.ErrorResponse("OID không hợp lệ.");
+
+            string cleanOid = System.Net.WebUtility.UrlDecode(oid).Replace("%2F", "/").Replace("%2f", "/");
+            var ok = await _eContractRepository.MarkSalesVoucherCreatedAsync(cleanOid);
+            return ok
+                ? ApiResponse<object>.SuccessResponse(null, "Đã đánh dấu tạo chứng từ.")
+                : ApiResponse<object>.ErrorResponse("Không tìm thấy hợp đồng.");
         }
 
         public async Task<ApiResponse<EContractDetailsViewModel>> GetJobDetailsAsync(string oid, string kt = "0")
@@ -2399,6 +2464,83 @@ namespace ERP_Portal_RC.Application.Services
                 Page = page,
                 PageSize = request.PageSize
             };
+        }
+
+        // ============================================================
+        // Doanh thu theo cây ASM (UI "Quản lý team")
+        // ============================================================
+        public async Task<TeamRevenueResponse> GetTeamRevenueAsync(
+            string userCode, string frmDate, string endDate, string saleFilter)
+        {
+            var (contracts, emps) = await _eContractRepository.GetTeamRevenueAsync(
+                userCode, frmDate, endDate, saleFilter ?? "");
+
+            // Doanh thu ghi nhận = HĐ đã duyệt trở lên (CurrSignNumb >= 301).
+            const int RECOGNIZED = 301;
+
+            var byEmp = contracts
+                .Where(c => c.CurrSignNumb >= RECOGNIZED)
+                .GroupBy(c => c.SaleEmID)
+                .ToDictionary(
+                    g => g.Key,
+                    g => new { Orders = g.Count(), Revenue = g.Sum(x => x.SumAmnt) });
+
+            // Danh sách NV (dedupe theo EmployeeID — cây có thể lặp do thuộc nhiều nhánh).
+            var employees = emps
+                .GroupBy(e => e.EmployeeID)
+                .Select(g => g.First())
+                .Select(e =>
+                {
+                    byEmp.TryGetValue(e.EmployeeID, out var agg);
+                    return new TeamEmployeeRevenue
+                    {
+                        EmployeeId = e.EmployeeID,
+                        Name = StripLevelPrefix(e.hoten_V, e.LevelVal),
+                        Level = e.LevelVal,
+                        ParentId = e.ParentEmployeeID,
+                        IsGroup = e.IsGroup,
+                        SortId = e.SortID,
+                        Orders = agg?.Orders ?? 0,
+                        Revenue = agg?.Revenue ?? 0m
+                    };
+                })
+                .OrderByDescending(x => x.Revenue)
+                .ThenBy(x => x.SortId)
+                .ToList();
+
+            DateTime.TryParse(frmDate, out var frm);
+            DateTime.TryParse(endDate, out var end);
+
+            return new TeamRevenueResponse
+            {
+                FrmDate = frm,
+                ToDate = end,
+                TotalRevenue = employees.Sum(x => x.Revenue),
+                TotalOrders = employees.Sum(x => x.Orders),
+                ManagedCount = emps.Select(e => e.EmployeeID).Distinct().Count(id => id != userCode),
+                Employees = employees,
+                Contracts = contracts.Select(c => new TeamContractItem
+                {
+                    Oid = c.OID,
+                    SaleEmId = c.SaleEmID,
+                    EmplName = c.EmplName,
+                    ODate = c.ODate,
+                    CusName = c.CusName,
+                    CusTax = c.CusTax,
+                    CmpnId = c.CmpnID,
+                    CmpnName = c.CmpnName,
+                    SumAmnt = c.SumAmnt,
+                    CurrSignNumb = c.CurrSignNumb,
+                    IsXHD = c.IsXHD
+                }).ToList()
+            };
+        }
+
+        private static string StripLevelPrefix(string hoten, string level)
+        {
+            if (string.IsNullOrEmpty(hoten)) return hoten;
+            var prefix = (level ?? "") + " - ";
+            return hoten.StartsWith(prefix) ? hoten.Substring(prefix.Length) : hoten;
         }
     }
 }

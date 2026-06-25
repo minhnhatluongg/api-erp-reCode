@@ -22,7 +22,7 @@ namespace API.ERP_Portal_RC.Controllers
         /// <param name="clnID"></param>
         /// <param name="isManager"></param>
         /// <returns></returns>
-        [HttpGet("managers")]            // không truyền clnID -> mặc định 21:000
+        [HttpGet("managers")]            
         [HttpGet("managers/{clnID}")]
         public async Task<ActionResult<ApiResponse<List<ManagerDto>>>> GetManagers(string clnID = "21:000",bool isManager = false)
         {

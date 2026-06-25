@@ -122,5 +122,15 @@ namespace ERP_Portal_RC.Application.Interfaces
         /// Dùng cho 2 case: sau UnSign hoặc kế toán từ chối.
         /// </summary>
         Task<ApiResponse<string>> PatchContractAsync(ContractPreviewRequest request, string userCode);
+
+        // Doanh thu theo cây ASM (UI "Quản lý team").
+        Task<TeamRevenueResponse> GetTeamRevenueAsync(
+            string userCode, string frmDate, string endDate, string saleFilter);
+
+        // Dữ liệu gốc dựng Chứng từ bán hàng bên LOT (header KH + NV + lines).
+        Task<ApiResponse<SalesVoucherDataDto>> GetSalesVoucherDataAsync(string oid);
+
+        // Đánh dấu đã tạo Chứng từ bán hàng (idempotency, set isCheckCT=1).
+        Task<ApiResponse<object>> MarkSalesVoucherCreatedAsync(string oid);
     }
 }

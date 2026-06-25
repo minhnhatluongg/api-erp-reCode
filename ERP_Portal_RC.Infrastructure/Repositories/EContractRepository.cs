@@ -1437,6 +1437,18 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             }
         }
 
+        public async Task<bool> MarkSalesVoucherCreatedAsync(string oid)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            // Atomic claim: chỉ set khi đang = 0 → trả true CHỈ khi chuyển 0->1.
+            // Lần gọi sau (đã =1) trả false → caller biết "đã tạo rồi", bỏ qua.
+            var rows = await conn.ExecuteAsync(
+                "UPDATE EContracts SET isCheckCT = 1, dateCheckCT = GETDATE() " +
+                "WHERE OID = @oid AND ISNULL(isCheckCT, 0) = 0",
+                new { oid });
+            return rows > 0;
+        }
+
         public async Task<EContractHistoryRaw2> GetEContractRawDataAsync(string oid)
         {
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);
@@ -2788,6 +2800,30 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
                 : new List<SubEmpl>();
 
             return (data, subEmpl);
+        }
+
+        // Doanh thu theo cây ASM: gọi SP wspRevenue_SubEmpl_ByOrder.
+        // Result 1 = từng đơn (RevenueContractRow); Result 2 = cây cấp dưới (RevenueEmplRow).
+        public async Task<(List<RevenueContractRow> Contracts, List<RevenueEmplRow> Employees)>
+            GetTeamRevenueAsync(string crtUser, string frmDate, string endDate, string saleFilter)
+        {
+            using var conn = _dbConnectionFactory.GetConnection(BosOnline);
+            var p = new DynamicParameters();
+            p.Add("@CrtUser", crtUser);
+            p.Add("@Frm_date", frmDate);
+            p.Add("@End_date", endDate);
+            p.Add("@SaleFilter", saleFilter ?? "");
+
+            using var multi = await conn.QueryMultipleAsync(
+                "wspRevenue_SubEmpl_ByOrder", p,
+                commandType: CommandType.StoredProcedure, commandTimeout: 3600);
+
+            var contracts = (await multi.ReadAsync<RevenueContractRow>()).ToList();
+            var emps = !multi.IsConsumed
+                ? (await multi.ReadAsync<RevenueEmplRow>()).ToList()
+                : new List<RevenueEmplRow>();
+
+            return (contracts, emps);
         }
     }
 }
