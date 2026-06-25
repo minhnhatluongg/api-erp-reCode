@@ -35,6 +35,7 @@ namespace ERP_Portal_RC.Domain.Entities
         // Thông tin Bên A (Khách hàng)
         public string PartnerName { get; set; }    // Map CusName
         public string PartnerVat { get; set; }     // Map CusTax
+        public string? PartnerCMND { get; set; }   // Map CusCMND_ID (CCCD KH) — ưu tiên hiển thị nếu có & khác ""
         public string PartnerAddress { get; set; } // Map CusAddress
         public string PartnerPhone { get; set; }   // Map CusTel
         public string PartnerEmail { get; set; }   // Map CusEmail
