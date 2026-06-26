@@ -167,5 +167,8 @@ namespace ERP_Portal_RC.Domain.Interfaces
 
         // Đánh dấu đã tạo Chứng từ bán hàng (idempotency) — set isCheckCT=1.
         Task<bool> MarkSalesVoucherCreatedAsync(string oid);
+
+        // LoginName (mã NV bên LOT) theo UserCode — từ BosConfigure.bosuser.
+        Task<string?> GetUserLoginNameAsync(string userCode);
     }
 }
