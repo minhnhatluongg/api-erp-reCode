@@ -1449,6 +1449,15 @@ namespace ERP_Portal_RC.Infrastructure.Repositories
             return rows > 0;
         }
 
+        public async Task<string?> GetUserLoginNameAsync(string userCode)
+        {
+            if (string.IsNullOrWhiteSpace(userCode)) return null;
+            using var conn = _dbConnectionFactory.GetConnection("BosConfigure");
+            return await conn.QueryFirstOrDefaultAsync<string>(
+                "SELECT TOP 1 LoginName FROM dbo.bosuser WHERE UserCode = @userCode",
+                new { userCode });
+        }
+
         public async Task<EContractHistoryRaw2> GetEContractRawDataAsync(string oid)
         {
             using var conn = _dbConnectionFactory.GetConnection(BosOnline);

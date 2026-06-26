@@ -1421,6 +1421,8 @@ namespace ERP_Portal_RC.Application.Services
                 ContactPerson = m.CusPeople_Sign ?? "",
                 SalesPersonCode = m.SaleEmID ?? "",
                 SalesPersonName = m.SaleFullName ?? "",
+                // LoginName = mã NV bên LOT (để FE fill khớp NV LOT → hiện tên).
+                SalesPersonLoginName = await _eContractRepository.GetUserLoginNameAsync(m.SaleEmID) ?? "",
                 Description = m.Descrip ?? "",
                 Lines = (raw.EContractDetails ?? new List<EContractDetails>())
                     .Where(d => !string.IsNullOrWhiteSpace(d.ItemName))

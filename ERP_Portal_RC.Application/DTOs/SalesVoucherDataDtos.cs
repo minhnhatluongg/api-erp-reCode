@@ -16,8 +16,9 @@ namespace ERP_Portal_RC.Application.DTOs
         public string Address { get; set; } = "";        // CusAddress
         public string Phone { get; set; } = "";          // CusTel
         public string ContactPerson { get; set; } = "";  // CusPeople_Sign
-        public string SalesPersonCode { get; set; } = "";// SaleEmID
+        public string SalesPersonCode { get; set; } = "";// SaleEmID (usercode ERP)
         public string SalesPersonName { get; set; } = "";// SaleFullName
+        public string SalesPersonLoginName { get; set; } = ""; // bosuser.LoginName = mã NV bên LOT
         public string Description { get; set; } = "";    // Descrip
         public List<SalesVoucherLineDto> Lines { get; set; } = new();
     }
