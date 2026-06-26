@@ -81,3 +81,5 @@ deploy/artifacts/
 /.claude/skills/gitnexus
 /AGENTS.md
 /CLAUDE.md
+/cay_asm.txt
+/listContract_v26.txt

@@ -315,7 +315,6 @@ public class InvoiceService : IInvoiceService
             BuyerCompany = contract.CusName,
             BuyerTax = !string.IsNullOrWhiteSpace(contract.CusCMND_ID) ? contract.CusCMND_ID : contract.CusTax,
             BuyerAddress = contract.CusAddress,
-            // Ưu tiên email Sale (từ GetSaleInfo_ByInvRef), fallback về CusEmail của KH
             BuyerEmail = !string.IsNullOrWhiteSpace(saleEmail) ? saleEmail : contract.CusEmail,
             BuyerPhone = contract.CusTel,
             BuyerAcc = contract.CusBankNumber,

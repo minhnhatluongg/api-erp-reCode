@@ -101,6 +101,107 @@ namespace API.ERP_Portal_RC.Controllers
                 return BadRequest(ApiResponse<ListEcontractViewModel>.ErrorResponse(ex.Message));
             }
         }
+
+        /// <summary>
+        /// Doanh thu theo cây ASM của NV login (UI "Quản lý team").
+        /// Trả tổng doanh thu + đơn theo từng NV cấp dưới + danh sách hợp đồng team.
+        /// </summary>
+        [HttpGet("revenue-by-team")]
+        public async Task<ActionResult<ApiResponse<TeamRevenueResponse>>> GetRevenueByTeam(
+            [FromQuery] string? FrmDate,
+            [FromQuery] string? ToDate,
+            [FromQuery] string? SaleFilter)
+        {
+            try
+            {
+                var userCode = User.FindFirst("UserCode")?.Value;
+                if (string.IsNullOrEmpty(userCode))
+                    return Unauthorized(ApiResponse<TeamRevenueResponse>.ErrorResponse("Thiếu UserCode"));
+
+                var result = await _econtractService.GetTeamRevenueAsync(
+                    userCode, FrmDate ?? "", ToDate ?? "", SaleFilter ?? "");
+
+                return Ok(ApiResponse<TeamRevenueResponse>.SuccessResponse(result));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<TeamRevenueResponse>.ErrorResponse(ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Đơn của CHÍNH NV login + tổng tiền (UI "Theo dõi thanh toán").
+        /// Dùng lại SP revenue (SaleFilter = chính user) → chỉ đơn của user đó.
+        /// LOT sẽ overlay tình trạng thu tiền (QR) lên trên.
+        /// </summary>
+        [HttpGet("my-orders-revenue")]
+        public async Task<ActionResult<ApiResponse<List<TeamContractItem>>>> GetMyOrdersRevenue(
+            [FromQuery] string? FrmDate,
+            [FromQuery] string? ToDate)
+        {
+            try
+            {
+                var userCode = User.FindFirst("UserCode")?.Value;
+                if (string.IsNullOrEmpty(userCode))
+                    return Unauthorized(ApiResponse<List<TeamContractItem>>.ErrorResponse("Thiếu UserCode"));
+
+                // SaleFilter = userCode → SP chỉ trả đơn của chính NV login.
+                var result = await _econtractService.GetTeamRevenueAsync(
+                    userCode, FrmDate ?? "", ToDate ?? "", userCode);
+
+                return Ok(ApiResponse<List<TeamContractItem>>.SuccessResponse(result.Contracts));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<List<TeamContractItem>>.ErrorResponse(ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Dữ liệu gốc dựng "Chứng từ bán hàng" bên LOT từ 1 hợp đồng (theo OID).
+        /// Header (KH + NV) + lines (tên hàng, SL, đơn giá GỒM VAT, %VAT).
+        /// </summary>
+        [HttpGet("sales-voucher-data")]
+        public async Task<ActionResult<ApiResponse<SalesVoucherDataDto>>> GetSalesVoucherData(
+            [FromQuery] string oid)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(oid))
+                    return BadRequest(ApiResponse<SalesVoucherDataDto>.ErrorResponse("Thiếu OID"));
+
+                var result = await _econtractService.GetSalesVoucherDataAsync(oid);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<SalesVoucherDataDto>.ErrorResponse(ex.Message));
+            }
+        }
+
+        public class MarkSalesVoucherRequest { public string Oid { get; set; } = ""; }
+
+        /// <summary>
+        /// LOT gọi sau khi tạo Chứng từ bán hàng thành công → set isCheckCT=1 (chống trùng).
+        /// </summary>
+        [HttpPost("mark-sales-voucher-created")]
+        public async Task<ActionResult<ApiResponse<object>>> MarkSalesVoucherCreated(
+            [FromBody] MarkSalesVoucherRequest req)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(req?.Oid))
+                    return BadRequest(ApiResponse<object>.ErrorResponse("Thiếu OID"));
+
+                var result = await _econtractService.MarkSalesVoucherCreatedAsync(req.Oid);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<object>.ErrorResponse(ex.Message));
+            }
+        }
+
         /// <summary>
         /// Lấy toàn bộ hợp đồng theo bộ lọc mở rộng, trả kèm meta tiền.
         /// </summary>

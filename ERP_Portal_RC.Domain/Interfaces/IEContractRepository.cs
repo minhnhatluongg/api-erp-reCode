@@ -160,5 +160,12 @@ namespace ERP_Portal_RC.Domain.Interfaces
         int? statusFilter,
         int page,
         int pageSize);
+
+        // Doanh thu theo cây ASM (SP wspRevenue_SubEmpl_ByOrder).
+        Task<(List<RevenueContractRow> Contracts, List<RevenueEmplRow> Employees)>
+            GetTeamRevenueAsync(string crtUser, string frmDate, string endDate, string saleFilter);
+
+        // Đánh dấu đã tạo Chứng từ bán hàng (idempotency) — set isCheckCT=1.
+        Task<bool> MarkSalesVoucherCreatedAsync(string oid);
     }
 }
